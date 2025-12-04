@@ -9,4 +9,3 @@ const Stack = Contentstack.Stack({
 });
 
 export default Stack;
-

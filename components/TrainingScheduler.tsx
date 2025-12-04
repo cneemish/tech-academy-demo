@@ -66,6 +66,28 @@ export default function TrainingScheduler() {
     fetchTrainers();
     fetchCourses();
     // Don't fetch all modules - we'll use modules from selected course
+    
+    // Auto-refresh courses every 30 seconds to detect new entries (silent refresh)
+    const refreshInterval = setInterval(() => {
+      fetchCourses(true); // Silent refresh
+      // Also refresh selected course details if a course is selected
+      if (selectedCourse) {
+        fetchCourseDetails(selectedCourse, true);
+      }
+    }, 30000); // 30 seconds
+    
+    // Also refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCourses();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -117,36 +139,49 @@ export default function TrainingScheduler() {
     }
   };
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (silent = false) => {
     try {
-      setIsLoadingCourses(true);
+      if (!silent) {
+        setIsLoadingCourses(true);
+      }
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const response = await fetch('/api/courses', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
-      console.log('Courses fetch response:', data);
-      
       if (data.success) {
-        setCourses(data.courses || []);
-        if (data.courses && data.courses.length === 0) {
-          console.warn('No courses found. Please create and publish courses in Contentstack.');
+        const newCourses = data.courses || [];
+        // Only update if courses actually changed
+        const currentCourseIds = courses.map((c: Course) => c.uid).sort().join(',');
+        const newCourseIds = newCourses.map((c: Course) => c.uid).sort().join(',');
+        
+        if (currentCourseIds !== newCourseIds) {
+          setCourses(newCourses);
+          // If a course was selected and it still exists, refresh its details
+          if (selectedCourse && newCourses.some((c: Course) => c.uid === selectedCourse)) {
+            fetchCourseDetails(selectedCourse, true);
+          }
         }
-      } else {
-        console.error('Failed to fetch courses:', data.error, data.details);
       }
     } catch (error) {
       console.error('Error fetching courses:', error);
+      // Don't crash - just log the error
     } finally {
-      setIsLoadingCourses(false);
+      if (!silent) {
+        setIsLoadingCourses(false);
+      }
     }
   };
 
 
-  const fetchCourseDetails = async (entryId: string) => {
+  const fetchCourseDetails = async (entryId: string, silent = false) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const response = await fetch(`/api/courses/entry/${entryId}`, {
@@ -154,11 +189,15 @@ export default function TrainingScheduler() {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
-      console.log('Course details fetch response:', data);
       
       if (data.success && data.course) {
+        const previousModuleCount = selectedCourseData?.course_modules?.length || 0;
         setSelectedCourseData(data.course);
         
         // Extract and sort modules from the course's referenced modules
@@ -187,6 +226,11 @@ export default function TrainingScheduler() {
         
         // Set the modules for this course
         setAllModules(sortedModules);
+        
+        // If new modules were added, log it
+        if (sortedModules.length > previousModuleCount && previousModuleCount > 0 && !silent) {
+          console.log(`New module(s) detected in course! Previous: ${previousModuleCount}, New: ${sortedModules.length}`);
+        }
         
         // Auto-fill plan name with course title
         const courseTitle = data.course.title || data.course.course_title || '';
@@ -425,7 +469,7 @@ export default function TrainingScheduler() {
               </label>
               <button
                 type="button"
-                onClick={fetchCourses}
+                onClick={() => fetchCourses(false)}
                 disabled={isLoadingCourses}
                 style={{
                   padding: '6px 12px',

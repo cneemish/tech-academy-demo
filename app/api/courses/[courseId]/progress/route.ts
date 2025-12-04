@@ -101,15 +101,28 @@ async function handlePost(req: AuthenticatedRequest, courseId: string) {
       courseProgress.lastAccessedAt = new Date();
 
       // Calculate progress percentage
+      // Use provided totalModules, or fallback to completed modules count
+      // This allows dynamic recalculation when new modules are added
       const totalModulesCount = totalModules || courseProgress.completedModules.length;
+      const completedCount = courseProgress.completedModules.length;
+      
       courseProgress.progress = totalModulesCount > 0
-        ? Math.round((courseProgress.completedModules.length / totalModulesCount) * 100)
+        ? Math.round((completedCount / totalModulesCount) * 100)
         : 0;
 
+      // Ensure progress doesn't exceed 100%
+      courseProgress.progress = Math.min(courseProgress.progress, 100);
+
       // Check if course is completed
-      if (courseProgress.completedModules.length >= totalModulesCount && totalModulesCount > 0) {
+      // Only mark as completed if all current modules are done
+      if (completedCount >= totalModulesCount && totalModulesCount > 0) {
         courseProgress.completedAt = new Date();
         courseProgress.progress = 100;
+      } else {
+        // If new modules were added after completion, unmark as completed
+        if (courseProgress.completedAt && completedCount < totalModulesCount) {
+          courseProgress.completedAt = undefined;
+        }
       }
     }
 
