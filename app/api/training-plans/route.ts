@@ -56,15 +56,15 @@ async function handlePost(req: AuthenticatedRequest) {
     }
 
     // Validate modules
-    for (const module of modules) {
-      if (!module.moduleName || !module.startDate || !module.endDate) {
+    for (const moduleItem of modules) {
+      if (!moduleItem.moduleName || !moduleItem.startDate || !moduleItem.endDate) {
         return NextResponse.json(
           { error: 'Each module must have a name, start date, and end date' },
           { status: 400 }
         );
       }
 
-      if (new Date(module.startDate) >= new Date(module.endDate)) {
+      if (new Date(moduleItem.startDate) >= new Date(moduleItem.endDate)) {
         return NextResponse.json(
           { error: 'End date must be after start date for each module' },
           { status: 400 }
@@ -82,8 +82,9 @@ async function handlePost(req: AuthenticatedRequest) {
       description,
       traineeId,
       traineeEmail: trainee.email,
-      modules: modules.map((m: any) => ({
-        moduleName: m.moduleName,
+      modules: modules.map((m: any, index: number) => ({
+        moduleUid: m.moduleUid || '',
+        moduleName: m.moduleName || `Module ${index + 1}`,
         trainerName: m.trainerName || '',
         startDate: new Date(m.startDate),
         endDate: new Date(m.endDate),

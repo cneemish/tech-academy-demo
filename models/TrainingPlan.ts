@@ -9,6 +9,7 @@ export interface ITrainingPlan extends Document {
   trainerId?: string;
   trainerEmail?: string;
   modules: {
+    moduleUid?: string;
     moduleName: string;
     trainerName?: string;
     startDate: Date;
@@ -52,6 +53,9 @@ const TrainingPlanSchema: Schema = new Schema(
     },
     modules: [
       {
+        moduleUid: {
+          type: String,
+        },
         moduleName: {
           type: String,
           required: true,

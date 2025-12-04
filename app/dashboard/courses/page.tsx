@@ -12,6 +12,7 @@ export default function CoursesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTaxonomy, setSelectedTaxonomy] = useState('');
   const [taxonomyTerms, setTaxonomyTerms] = useState<any[]>([]);
+  const [taxonomyTree, setTaxonomyTree] = useState<any[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -28,6 +29,7 @@ export default function CoursesPage() {
     setUser(parsedUser);
     fetchTaxonomy();
     fetchCourses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   useEffect(() => {
@@ -37,22 +39,31 @@ export default function CoursesPage() {
     }, 300);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, selectedTaxonomy]);
 
   const fetchTaxonomy = async () => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const response = await fetch('/api/taxonomy', {
+      // Use the correct taxonomy UID: "course_module" as per content type
+      const response = await fetch(`/api/taxonomy?uid=course_module`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
       const data = await response.json();
       if (data.success) {
+        // Set both flat list (for filtering) and tree (for display)
         setTaxonomyTerms(data.taxonomy || []);
+        setTaxonomyTree(data.taxonomyTree || []);
+      } else {
+        setTaxonomyTerms([]);
+        setTaxonomyTree([]);
       }
     } catch (error) {
       console.error('Error fetching taxonomy:', error);
+      setTaxonomyTerms([]);
+      setTaxonomyTree([]);
     }
   };
 
@@ -95,12 +106,10 @@ export default function CoursesPage() {
             marginBottom: '8px',
           }}
         >
-          {user.role === 'trainee' ? 'My Courses' : 'All Courses'}
+          All Courses
         </h2>
         <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '32px' }}>
-          {user.role === 'trainee' 
-            ? 'Browse and continue your assigned courses'
-            : 'Manage and view all available courses'}
+          Manage and view all available courses
         </p>
 
         {/* Search and Filter */}
@@ -111,46 +120,92 @@ export default function CoursesPage() {
             padding: '24px',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
             marginBottom: '24px',
-            display: 'flex',
-            gap: '16px',
-            flexWrap: 'wrap',
           }}
         >
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <input
-              type="text"
-              placeholder="Search courses..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '8px',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ minWidth: '200px' }}>
-            <select
-              value={selectedTaxonomy}
-              onChange={(e) => setSelectedTaxonomy(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '8px',
-                fontSize: '14px',
-                background: 'white',
-              }}
-            >
-              <option value="">All Categories</option>
-              {taxonomyTerms.map((term: any) => (
-                <option key={term.uid} value={term.uid}>
-                  {term.name}
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
+              <input
+                type="text"
+                placeholder="Search courses..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+            <div style={{ minWidth: '250px' }}>
+              <select
+                value={selectedTaxonomy}
+                onChange={(e) => setSelectedTaxonomy(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  background: 'white',
+                  cursor: 'pointer',
+                }}
+                disabled={taxonomyTerms.length === 0}
+              >
+                <option value="">
+                  {taxonomyTerms.length === 0 ? 'No categories available' : 'All Categories'}
                 </option>
-              ))}
-            </select>
+                {taxonomyTree.length > 0 ? (
+                  // Render hierarchical categories with indentation
+                  taxonomyTree.map((term: any) => {
+                    const renderTerm = (t: any, level: number = 0): JSX.Element[] => {
+                      const indent = '  '.repeat(level);
+                      const elements: JSX.Element[] = [
+                        <option key={t.uid} value={t.uid}>
+                          {indent}{t.name || 'Unnamed Term'}
+                        </option>
+                      ];
+                      
+                      // Recursively render children
+                      if (t.children && t.children.length > 0) {
+                        t.children.forEach((child: any) => {
+                          elements.push(...renderTerm(child, level + 1));
+                        });
+                      }
+                      
+                      return elements;
+                    };
+                    
+                    return renderTerm(term);
+                  })
+                ) : (
+                  // Fallback to flat list if tree is not available
+                  taxonomyTerms.map((term: any) => (
+                    <option key={term.uid} value={term.uid}>
+                      {term.name || term.title || 'Unnamed Term'}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            {selectedTaxonomy && (
+              <button
+                onClick={() => setSelectedTaxonomy('')}
+                style={{
+                  padding: '12px 20px',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                }}
+              >
+                Clear Filter
+              </button>
+            )}
           </div>
         </div>
 
@@ -213,18 +268,48 @@ export default function CoursesPage() {
                   style={{
                     width: '100%',
                     height: '180px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     borderRadius: '8px',
                     marginBottom: '16px',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'white',
                     fontSize: '48px',
                     fontWeight: 'bold',
+                    position: 'relative',
                   }}
                 >
-                  {course.title?.[0]?.toUpperCase() || '📚'}
+                  {(() => {
+                    // Contentstack file field can be an object with url property or a string
+                    const thumbnailUrl = 
+                      course.course_thumbnail?.url || 
+                      (typeof course.course_thumbnail === 'string' ? course.course_thumbnail : null);
+                    
+                    if (thumbnailUrl) {
+                      return (
+                        <img
+                          src={thumbnailUrl}
+                          alt={course.title || 'Course thumbnail'}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                          }}
+                          onError={(e) => {
+                            // Fallback to gradient if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      );
+                    }
+                    return course.title?.[0]?.toUpperCase() || '📚';
+                  })()}
                 </div>
                 <h3
                   style={{
@@ -234,9 +319,9 @@ export default function CoursesPage() {
                     marginBottom: '8px',
                   }}
                 >
-                  {course.title || 'Untitled Course'}
+                  {course.title || course.course_title || 'Untitled Course'}
                 </h3>
-                {course.description && (
+                {(course.description || course.course_description) && (
                   <p
                     style={{
                       fontSize: '14px',
@@ -248,7 +333,7 @@ export default function CoursesPage() {
                       overflow: 'hidden',
                     }}
                   >
-                    {course.description}
+                    {course.description || course.course_description}
                   </p>
                 )}
                 <div
@@ -260,14 +345,58 @@ export default function CoursesPage() {
                     borderTop: '1px solid #e5e7eb',
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      color: '#6b7280',
-                    }}
-                  >
-                    {course.course_modules?.length || 0} modules
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                      }}
+                    >
+                      {course.course_modules?.length || 0} modules
+                    </span>
+                    {course.taxonomy && Array.isArray(course.taxonomy) && course.taxonomy.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {course.taxonomy.slice(0, 3).map((taxonomyTerm: any, idx: number) => {
+                          // Handle both object and string formats
+                          const termUid = typeof taxonomyTerm === 'string' 
+                            ? taxonomyTerm 
+                            : taxonomyTerm?.uid || taxonomyTerm?.term_uid;
+                          const termName = typeof taxonomyTerm === 'string'
+                            ? taxonomyTerms.find(t => t.uid === taxonomyTerm)?.name || taxonomyTerm
+                            : taxonomyTerm?.name || taxonomyTerm?.title || 'Category';
+                          
+                          return (
+                            <span
+                              key={termUid || idx}
+                              style={{
+                                padding: '4px 8px',
+                                background: '#e0e7ff',
+                                color: '#6366f1',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: '500',
+                              }}
+                            >
+                              {termName}
+                            </span>
+                          );
+                        })}
+                        {course.taxonomy.length > 3 && (
+                          <span
+                            style={{
+                              padding: '4px 8px',
+                              background: '#f3f4f6',
+                              color: '#6b7280',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                            }}
+                          >
+                            +{course.taxonomy.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <span
                     style={{
                       padding: '6px 12px',

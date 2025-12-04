@@ -1,6 +1,7 @@
 # Quick Start Guide
 
 ## Prerequisites
+
 - Node.js 18+ installed
 - MongoDB connection string
 - Contentstack account with API keys
@@ -8,12 +9,14 @@
 ## Setup Steps
 
 1. **Install Dependencies**
+
    ```bash
    npm install
    ```
 
 2. **Create Environment File**
    Create a `.env.local` file in the root directory with:
+
    ```
    MONGODB_URI=your-mongodb-connection-string
    JWT_SECRET=your-super-secret-jwt-key-change-in-production
@@ -22,21 +25,24 @@
    EMAIL_PASS=your-app-password      # Optional - for email invitations
    CONTENTSTACK_API_KEY=your-contentstack-api-key
    CONTENTSTACK_DELIVERY_TOKEN=your-contentstack-delivery-token
-   CONTENTSTACK_ENVIRONMENT=production
+   CONTENTSTACK_ENVIRONMENT=prod
    ```
 
 3. **Initialize Database**
+
    ```bash
    npx ts-node scripts/init-db.ts
    ```
-   
+
    This creates:
+
    - Three roles: superadmin, admin, trainee
    - Default superadmin user:
      - Email: `superadmin@techacademy.com`
      - Password: `SuperAdmin123!`
 
 4. **Start Development Server**
+
    ```bash
    npm run dev
    ```
@@ -55,6 +61,7 @@
 ## Email Configuration (Optional)
 
 If you want to send invitation emails:
+
 1. Use a Gmail account
 2. Enable "App Passwords" in your Google Account settings
 3. Add `EMAIL_USER` and `EMAIL_PASS` to `.env.local`
@@ -64,10 +71,12 @@ If email is not configured, user invitations will still work but credentials wil
 ## Testing the Application
 
 1. **Login as Super Admin**
+
    - Use the default credentials above
    - You'll be redirected to the Home Dashboard
 
 2. **Invite a User**
+
    - Click on "Users" in the sidebar
    - Click on "Invite User" tab
    - Fill in the form (first name, last name, email, role)
@@ -75,15 +84,18 @@ If email is not configured, user invitations will still work but credentials wil
    - The user will receive an email with their credentials (if email is configured)
 
 3. **View Users**
+
    - Click on "Users" tab
    - See all users in the system
    - Search functionality available
 
 4. **Create Training Plan**
+
    - Click on "Training Scheduler" in the sidebar
    - Select a trainee and create a training plan with modules
 
 5. **View Courses**
+
    - Click on "Courses" in the sidebar
    - Browse available courses from Contentstack
    - Search and filter by taxonomy
@@ -95,6 +107,7 @@ If email is not configured, user invitations will still work but credentials wil
 ## Password Requirements
 
 When logging in, passwords must:
+
 - Be at least 8 characters long
 - Contain at least one uppercase letter
 - Contain at least one lowercase letter
