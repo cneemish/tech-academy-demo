@@ -197,20 +197,23 @@ export default function CoursesPage() {
                   {taxonomyTerms.length === 0 ? 'No categories available' : 'All Categories'}
                 </option>
                 {taxonomyTree.length > 0 ? (
-                  // Render hierarchical categories with indentation
+                  // Render hierarchical categories with full path (e.g., "UI > Content Type > Entry")
                   taxonomyTree.map((term: any) => {
-                    const renderTerm = (t: any, level: number = 0): JSX.Element[] => {
-                      const indent = '  '.repeat(level);
-                      const elements: JSX.Element[] = [
-                        <option key={t.uid} value={t.uid}>
-                          {indent}{t.name || 'Unnamed Term'}
-                        </option>
-                      ];
+                    const renderTerm = (t: any): JSX.Element[] => {
+                      const elements: JSX.Element[] = [];
                       
-                      // Recursively render children
+                      // Render current term with full path if available, otherwise just name
+                      const displayText = t.path || t.name || 'Unnamed Term';
+                      elements.push(
+                        <option key={t.uid} value={t.uid}>
+                          {displayText}
+                        </option>
+                      );
+                      
+                      // Recursively render children (they will have their own full paths)
                       if (t.children && t.children.length > 0) {
                         t.children.forEach((child: any) => {
-                          elements.push(...renderTerm(child, level + 1));
+                          elements.push(...renderTerm(child));
                         });
                       }
                       
@@ -219,14 +222,14 @@ export default function CoursesPage() {
                     
                     return renderTerm(term);
                   })
-                ) : (
-                  // Fallback to flat list if tree is not available
+                ) : taxonomyTerms.length > 0 ? (
+                  // Fallback to flat list with paths if available
                   taxonomyTerms.map((term: any) => (
                     <option key={term.uid} value={term.uid}>
-                      {term.name || term.title || 'Unnamed Term'}
+                      {term.path || term.name || term.title || 'Unnamed Term'}
                     </option>
                   ))
-                )}
+                ) : null}
               </select>
             </div>
             {selectedTaxonomy && (
