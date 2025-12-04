@@ -351,6 +351,8 @@ export default function TrainingScheduler() {
         body: JSON.stringify({
           planName,
           description,
+          courseId: selectedCourse,
+          courseTitle: selectedCourseData?.title || selectedCourseData?.course_title || planName,
           traineeId: selectedTrainee,
           modules: modules.map((m) => ({
             moduleUid: m.moduleUid,

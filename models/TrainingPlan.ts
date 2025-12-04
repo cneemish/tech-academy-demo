@@ -4,6 +4,8 @@ export interface ITrainingPlan extends Document {
   planId: string;
   planName: string;
   description?: string;
+  courseId?: string; // Contentstack course entry UID
+  courseTitle?: string; // Course title for easy reference
   traineeId: string;
   traineeEmail: string;
   trainerId?: string;
@@ -37,9 +39,17 @@ const TrainingPlanSchema: Schema = new Schema(
     description: {
       type: String,
     },
+    courseId: {
+      type: String,
+      index: true, // Index for faster queries
+    },
+    courseTitle: {
+      type: String,
+    },
     traineeId: {
       type: String,
       required: true,
+      index: true, // Index for faster queries
     },
     traineeEmail: {
       type: String,

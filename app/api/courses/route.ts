@@ -2,10 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stack from '@/lib/contentstack';
 import { roleMiddleware, AuthenticatedRequest } from '@/lib/middleware';
 import { detectTaxonomyFieldName, COMMON_TAXONOMY_FIELD_NAMES } from '@/lib/taxonomy-helper';
+import connectDB from '@/lib/mongodb';
+import TrainingPlan from '@/models/TrainingPlan';
 
 // Get all courses
 async function handleGet(req: AuthenticatedRequest) {
   try {
+    const user = req.user;
+    const userRole = user?.role;
+    
+    // For trainees, only show courses assigned via training plans
+    let assignedCourseIds: string[] = [];
+    if (userRole === 'trainee' && user?.userId) {
+      await connectDB();
+      const trainingPlans = await TrainingPlan.find({
+        traineeId: user.userId,
+        courseId: { $exists: true, $ne: '' }, // Only plans with courseId
+      }).select('courseId').lean();
+      
+      assignedCourseIds = trainingPlans
+        .map((plan: any) => plan.courseId)
+        .filter((id: string) => id && id.trim() !== '');
+      
+      console.log(`Trainee ${user.userId} has ${assignedCourseIds.length} assigned courses:`, assignedCourseIds);
+      
+      // If trainee has no assigned courses, return empty array
+      if (assignedCourseIds.length === 0) {
+        return NextResponse.json(
+          {
+            success: true,
+            courses: [],
+            count: 0,
+            message: 'No courses assigned. Please contact your trainer to assign courses.',
+          },
+          { status: 200 }
+        );
+      }
+    }
+    
     const Query = Stack.ContentType('course').Query();
 
     // Get query parameters for search and filters
@@ -37,6 +71,16 @@ async function handleGet(req: AuthenticatedRequest) {
     // We filter client-side to check if the taxonomy array contains the term UID
     // This approach works reliably regardless of SDK query limitations
     let filteredCourses = result[0] || [];
+    
+    // For trainees, filter to only show assigned courses
+    if (userRole === 'trainee' && assignedCourseIds.length > 0) {
+      filteredCourses = filteredCourses.filter((course: any) => {
+        const courseUid = course.uid;
+        return assignedCourseIds.includes(courseUid);
+      });
+      console.log(`Filtered to ${filteredCourses.length} assigned courses for trainee`);
+    }
+    
     if (taxonomyTerm) {
       filteredCourses = filteredCourses.filter((course: any) => {
         const taxonomyField = course.taxonomies || course.categories || course.taxonomy || course.category;
