@@ -8,7 +8,7 @@ import JSONRTEContent from '@/components/JSONRTEContent';
 export default function CourseDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const courseId = params?.courseId as string;
+  const courseId = params?.courseId as string; // This can be either UID or URL slug
   const [user, setUser] = useState<any>(null);
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,32 +30,77 @@ export default function CourseDetailPage() {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
     fetchCourse();
+    
+    // Auto-refresh course data every 30 seconds to detect new modules
+    const refreshInterval = setInterval(() => {
+      fetchCourse(true); // Silent refresh
+    }, 30000); // 30 seconds
+    
+    // Also refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCourse(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, router]);
 
-  const fetchCourse = async () => {
+  const fetchCourse = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const response = await fetch(`/api/courses/${courseId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
-      if (data.success) {
-        setCourse(data.course);
-        // Fetch course progress after course is loaded
-        fetchCourseProgress(data.course.uid || courseId);
+      if (data.success && data.course) {
+        const newCourse = data.course;
+        const previousModuleCount = course?.course_modules?.length || 0;
+        const newModuleCount = newCourse.course_modules?.length || 0;
+        
+        // Update course data
+        setCourse(newCourse);
+        
+        // Always fetch progress with current module count to ensure accurate calculation
+        // This handles cases where modules are added, removed, or the count changes
+        if (newModuleCount > 0) {
+          if (newModuleCount !== previousModuleCount && previousModuleCount > 0) {
+            console.log(`Module count changed! Previous: ${previousModuleCount}, New: ${newModuleCount}`);
+          }
+          // Always pass current module count to recalculate progress accurately
+          fetchCourseProgress(newCourse.uid || courseId, newModuleCount);
+        } else {
+          // No modules yet, fetch progress without module count
+          fetchCourseProgress(newCourse.uid || courseId);
+        }
       }
     } catch (error) {
       console.error('Error fetching course:', error);
+      // Don't crash - just log the error
+      // The UI will continue to show existing course data
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
-  const fetchCourseProgress = async (courseUid: string) => {
+  const fetchCourseProgress = async (courseUid: string, currentModuleCount?: number) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const response = await fetch(`/api/courses/${courseUid}/progress`, {
@@ -63,16 +108,46 @@ export default function CourseDetailPage() {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       if (data.success) {
-        setCourseProgress(data.progress);
+        let progressData = data.progress;
+        
+        // Always recalculate progress percentage based on current module count
+        // This ensures accuracy when modules are added or removed
+        if (currentModuleCount && currentModuleCount > 0) {
+          const completedCount = progressData.completedModules?.length || 0;
+          // Recalculate progress: completed modules / total modules * 100
+          const newProgress = Math.round((completedCount / currentModuleCount) * 100);
+          progressData = {
+            ...progressData,
+            progress: Math.min(Math.max(newProgress, 0), 100), // Clamp between 0 and 100
+            // If course was marked as completed but new modules were added, unmark it
+            // Only mark as completed if all current modules are done
+            completedAt: completedCount >= currentModuleCount && currentModuleCount > 0 ? new Date() : null,
+          };
+        } else {
+          // If no modules, progress should be 0
+          progressData = {
+            ...progressData,
+            progress: 0,
+            completedAt: null,
+          };
+        }
+        
+        setCourseProgress(progressData);
         // If user has a current module, set it as active
-        if (data.progress.currentModule && !activeModule) {
-          setActiveModule(data.progress.currentModule);
+        if (progressData.currentModule && !activeModule) {
+          setActiveModule(progressData.currentModule);
         }
       }
     } catch (error) {
       console.error('Error fetching course progress:', error);
+      // Don't crash - just log the error
     }
   };
 
@@ -80,7 +155,15 @@ export default function CourseDetailPage() {
     try {
       setIsMarkingComplete(true);
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      // Always use current module count to ensure progress is calculated correctly
+      // even if new modules were added since page load
       const totalModules = modules.length;
+      
+      if (totalModules === 0) {
+        console.warn('No modules found in course');
+        setIsMarkingComplete(false);
+        return;
+      }
       
       const response = await fetch(`/api/courses/${courseId}/progress`, {
         method: 'POST',
@@ -93,20 +176,57 @@ export default function CourseDetailPage() {
           totalModules,
         }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
       if (data.success) {
         setCourseProgress(data.progress);
         
         // Move to next module
-        const currentIndex = modules.findIndex((m: any) => m.uid === moduleUid);
-        if (currentIndex < modules.length - 1) {
-          const nextModule = modules[currentIndex + 1];
+        // Re-fetch modules to ensure we have the latest list (in case new modules were added)
+        const currentModules = modules; // Use current modules list
+        const currentIndex = currentModules.findIndex((m: any) => m.uid === moduleUid);
+        
+        if (currentIndex < currentModules.length - 1) {
+          const nextModule = currentModules[currentIndex + 1];
           setActiveModule(nextModule.uid);
+        } else {
+          // Check if there are more modules by refreshing course data
+          // This handles the case where new modules were added while user was completing
+          fetchCourse(true).then(() => {
+            // After refresh, check if there are more modules
+            const updatedModules = course?.course_modules || [];
+            if (updatedModules.length > currentModules.length) {
+              // New modules were added, set first new module as active
+              const sortedModules = [...updatedModules].sort((a: any, b: any) => {
+                const numA = Number(a.module_number) || 0;
+                const numB = Number(b.module_number) || 0;
+                return numA - numB;
+              });
+              const nextNewModule = sortedModules.find((m: any) => 
+                !data.progress.completedModules?.includes(m.uid)
+              );
+              if (nextNewModule) {
+                setActiveModule(nextNewModule.uid);
+              } else {
+                setActiveModule(null);
+              }
+            } else {
+              // All current modules completed
+              setActiveModule(null);
+            }
+          });
         }
+      } else {
+        throw new Error(data.error || 'Failed to mark module as complete');
       }
     } catch (error) {
       console.error('Error marking module as complete:', error);
+      // Show user-friendly error message instead of crashing
+      alert('Failed to mark module as complete. Please try again.');
     } finally {
       setIsMarkingComplete(false);
     }
@@ -125,9 +245,22 @@ export default function CourseDetailPage() {
       return numA - numB;
     });
   
-  // Calculate progress from courseProgress
+  // Calculate progress dynamically based on current module count
+  // This ensures progress updates correctly when new modules are added
   const completedModules = courseProgress?.completedModules?.length || 0;
-  const progress = courseProgress?.progress || (modules.length > 0 ? Math.round((completedModules / modules.length) * 100) : 0);
+  const currentModuleCount = modules.length;
+  
+  // Always recalculate progress based on current module count
+  // This ensures accuracy when modules are added or removed
+  let progress = 0;
+  if (currentModuleCount > 0) {
+    // Calculate progress: completed modules / total modules * 100
+    progress = Math.round((completedModules / currentModuleCount) * 100);
+    // Ensure progress doesn't exceed 100%
+    progress = Math.min(progress, 100);
+    // Ensure progress doesn't go below 0%
+    progress = Math.max(progress, 0);
+  }
 
   if (!user) {
     return <div>Loading...</div>;

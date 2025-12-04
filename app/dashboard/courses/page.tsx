@@ -29,13 +29,31 @@ export default function CoursesPage() {
     setUser(parsedUser);
     fetchTaxonomy();
     fetchCourses();
+    
+    // Auto-refresh courses every 30 seconds to detect new entries (silent refresh)
+    const refreshInterval = setInterval(() => {
+      fetchCourses(true); // Silent refresh - no loading indicator
+    }, 30000); // 30 seconds
+    
+    // Also refresh when page becomes visible (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCourses();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   useEffect(() => {
     // Debounce search
     const timer = setTimeout(() => {
-      fetchCourses();
+      fetchCourses(false); // Show loading for user-initiated searches
     }, 300);
 
     return () => clearTimeout(timer);
@@ -67,9 +85,11 @@ export default function CoursesPage() {
     }
   };
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
@@ -80,14 +100,34 @@ export default function CoursesPage() {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       if (data.success) {
-        setCourses(data.courses || []);
+        // Only update if courses actually changed (to avoid unnecessary re-renders)
+        const newCourses = data.courses || [];
+        const currentCourseIds = courses.map((c: any) => c.uid).sort().join(',');
+        const newCourseIds = newCourses.map((c: any) => c.uid).sort().join(',');
+        
+        if (currentCourseIds !== newCourseIds) {
+          setCourses(newCourses);
+          // If new courses were added, show a subtle notification
+          if (newCourses.length > courses.length && courses.length > 0) {
+            console.log(`New course(s) detected! Total: ${newCourses.length}`);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching courses:', error);
+      // Don't crash the app - just log the error
+      // The UI will continue to show existing courses
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
