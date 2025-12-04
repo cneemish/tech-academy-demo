@@ -6,6 +6,9 @@ import Layout from '@/components/Layout';
 import InviteUser from '@/components/InviteUser';
 import UsersList from '@/components/UsersList';
 
+// Force dynamic rendering - this page requires client-side features
+export const dynamic = 'force-dynamic';
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);

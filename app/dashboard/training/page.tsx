@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import TrainingScheduler from '@/components/TrainingScheduler';
 
+// Force dynamic rendering - this page requires client-side features
+export const dynamic = 'force-dynamic';
+
 export default function TrainingPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);

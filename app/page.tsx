@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LoginForm from '@/components/LoginForm';
 
+// Force dynamic rendering - this page requires client-side features
+export const dynamic = 'force-dynamic';
+
 export default function Home() {
   return (
     <main style={{ 

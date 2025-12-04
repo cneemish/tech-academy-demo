@@ -5,6 +5,9 @@ import { useRouter, useParams } from 'next/navigation';
 import Layout from '@/components/Layout';
 import JSONRTEContent from '@/components/JSONRTEContent';
 
+// Force dynamic rendering - this page requires client-side features
+export const dynamic = 'force-dynamic';
+
 export default function CourseDetailPage() {
   const router = useRouter();
   const params = useParams();

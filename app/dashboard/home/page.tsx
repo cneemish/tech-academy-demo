@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 
+// Force dynamic rendering - this page requires client-side features
+export const dynamic = 'force-dynamic';
+
 // Component to show assigned courses for trainees
 function AssignedCoursesList() {
   const [courses, setCourses] = useState<any[]>([]);
