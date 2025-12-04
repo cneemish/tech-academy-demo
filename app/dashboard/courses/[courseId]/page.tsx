@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Layout from '@/components/Layout';
+import JSONRTEContent from '@/components/JSONRTEContent';
 
 export default function CourseDetailPage() {
   const router = useRouter();
@@ -12,6 +13,8 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [courseProgress, setCourseProgress] = useState<any>(null);
+  const [isMarkingComplete, setIsMarkingComplete] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -27,6 +30,7 @@ export default function CourseDetailPage() {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
     fetchCourse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, router]);
 
   const fetchCourse = async () => {
@@ -41,6 +45,8 @@ export default function CourseDetailPage() {
       const data = await response.json();
       if (data.success) {
         setCourse(data.course);
+        // Fetch course progress after course is loaded
+        fetchCourseProgress(data.course.uid || courseId);
       }
     } catch (error) {
       console.error('Error fetching course:', error);
@@ -48,6 +54,80 @@ export default function CourseDetailPage() {
       setIsLoading(false);
     }
   };
+
+  const fetchCourseProgress = async (courseUid: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch(`/api/courses/${courseUid}/progress`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCourseProgress(data.progress);
+        // If user has a current module, set it as active
+        if (data.progress.currentModule && !activeModule) {
+          setActiveModule(data.progress.currentModule);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching course progress:', error);
+    }
+  };
+
+  const markModuleComplete = async (moduleUid: string) => {
+    try {
+      setIsMarkingComplete(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const totalModules = modules.length;
+      
+      const response = await fetch(`/api/courses/${courseId}/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          moduleUid,
+          totalModules,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCourseProgress(data.progress);
+        
+        // Move to next module
+        const currentIndex = modules.findIndex((m: any) => m.uid === moduleUid);
+        if (currentIndex < modules.length - 1) {
+          const nextModule = modules[currentIndex + 1];
+          setActiveModule(nextModule.uid);
+        }
+      }
+    } catch (error) {
+      console.error('Error marking module as complete:', error);
+    } finally {
+      setIsMarkingComplete(false);
+    }
+  };
+
+  // Sort modules by module_number in ascending order
+  // This must be computed before any conditional returns to follow React hooks rules
+  const modules = (course?.course_modules || [])
+    .map((module: any) => ({
+      ...module,
+      module_number: module.module_number || module.moduleNumber || 0,
+    }))
+    .sort((a: any, b: any) => {
+      const numA = Number(a.module_number) || 0;
+      const numB = Number(b.module_number) || 0;
+      return numA - numB;
+    });
+  
+  // Calculate progress from courseProgress
+  const completedModules = courseProgress?.completedModules?.length || 0;
+  const progress = courseProgress?.progress || (modules.length > 0 ? Math.round((completedModules / modules.length) * 100) : 0);
 
   if (!user) {
     return <div>Loading...</div>;
@@ -100,10 +180,6 @@ export default function CourseDetailPage() {
     );
   }
 
-  const modules = course.course_modules || [];
-  const completedModules = 0; // TODO: Get from training plan progress
-  const progress = modules.length > 0 ? Math.round((completedModules / modules.length) * 100) : 0;
-
   return (
     <Layout user={user} activePage="courses">
       <div style={{ display: 'flex', gap: '24px', maxWidth: '1400px', margin: '0 auto' }}>
@@ -135,7 +211,7 @@ export default function CourseDetailPage() {
                 color: '#1f2937',
               }}
             >
-              {course.title || 'Course'}
+              {course.title || course.course_title || 'Course'}
             </h3>
             <button
               onClick={() => router.push('/dashboard/courses')}
@@ -198,8 +274,9 @@ export default function CourseDetailPage() {
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {modules.map((module: any, index: number) => {
-                const isCompleted = index < completedModules;
+                const isCompleted = courseProgress?.completedModules?.includes(module.uid) || false;
                 const isActive = activeModule === module.uid;
+                const moduleNumber = module.module_number || (index + 1);
 
                 return (
                   <div
@@ -230,17 +307,17 @@ export default function CourseDetailPage() {
                           width: '24px',
                           height: '24px',
                           borderRadius: '50%',
-                          background: isCompleted ? '#10b981' : '#e5e7eb',
+                          background: isCompleted ? '#10b981' : isActive ? '#6366f1' : '#e5e7eb',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: isCompleted ? 'white' : '#6b7280',
+                          color: isCompleted || isActive ? 'white' : '#6b7280',
                           fontSize: '12px',
                           fontWeight: '600',
                           flexShrink: 0,
                         }}
                       >
-                        {isCompleted ? '✓' : index + 1}
+                        {isCompleted ? '✓' : moduleNumber}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div
@@ -251,7 +328,7 @@ export default function CourseDetailPage() {
                             marginBottom: '2px',
                           }}
                         >
-                          {module.title || `Module ${index + 1}`}
+                          {module.title || module.module_title || `Module ${moduleNumber}`}
                         </div>
                         {module.duration && (
                           <div style={{ fontSize: '12px', color: '#9ca3af' }}>
@@ -279,29 +356,31 @@ export default function CourseDetailPage() {
               marginBottom: '24px',
             }}
           >
-            <h1
-              style={{
-                fontSize: '32px',
-                fontWeight: 'bold',
-                color: '#1f2937',
-                marginBottom: '12px',
-              }}
-            >
-              {course.title || 'Course Title'}
-            </h1>
-            {course.description && (
-              <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
-                {course.description}
-              </p>
-            )}
+          <h1
+            style={{
+              fontSize: '32px',
+              fontWeight: 'bold',
+              color: '#1f2937',
+              marginBottom: '12px',
+            }}
+          >
+            {course.title || course.course_title || 'Course Title'}
+          </h1>
+          {(course.description || course.course_description) && (
+            <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+              {course.description || course.course_description}
+            </p>
+          )}
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: '12px' }}>
-              {completedModules === 0 ? (
+              {!activeModule && (
                 <button
                   onClick={() => {
                     if (modules.length > 0) {
-                      setActiveModule(modules[0].uid);
+                      // Start with module 1 (first module in sorted order)
+                      const firstModule = modules.find((m: any) => Number(m.module_number) === 1) || modules[0];
+                      setActiveModule(firstModule.uid);
                     }
                   }}
                   style={{
@@ -313,30 +392,61 @@ export default function CourseDetailPage() {
                     fontSize: '16px',
                     fontWeight: '500',
                     cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#4f46e5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#6366f1';
                   }}
                 >
                   Start Course
                 </button>
-              ) : (
+              )}
+              {activeModule && (
                 <button
                   onClick={() => {
-                    const nextModule = modules[completedModules];
-                    if (nextModule) {
-                      setActiveModule(nextModule.uid);
+                    const currentIndex = modules.findIndex((m: any) => m.uid === activeModule);
+                    const isModuleCompleted = courseProgress?.completedModules?.includes(activeModule) || false;
+                    
+                    if (!isModuleCompleted) {
+                      // Mark current module as complete
+                      markModuleComplete(activeModule);
+                    } else if (currentIndex < modules.length - 1) {
+                      // Move to next module
+                      setActiveModule(modules[currentIndex + 1].uid);
                     }
                   }}
+                  disabled={isMarkingComplete}
                   style={{
                     padding: '14px 28px',
-                    background: '#6366f1',
+                    background: isMarkingComplete ? '#9ca3af' : '#10b981',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
                     fontSize: '16px',
                     fontWeight: '500',
-                    cursor: 'pointer',
+                    cursor: isMarkingComplete ? 'not-allowed' : 'pointer',
+                    transition: 'background 0.2s',
+                    opacity: isMarkingComplete ? 0.7 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isMarkingComplete) {
+                      e.currentTarget.style.background = '#059669';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isMarkingComplete) {
+                      e.currentTarget.style.background = '#10b981';
+                    }
                   }}
                 >
-                  Resume Course
+                  {isMarkingComplete
+                    ? 'Marking as complete...'
+                    : courseProgress?.completedModules?.includes(activeModule)
+                    ? 'Go to next item →'
+                    : 'Mark as complete & Next →'}
                 </button>
               )}
             </div>
@@ -353,40 +463,125 @@ export default function CourseDetailPage() {
               }}
             >
               {(() => {
-                const module = modules.find((m: any) => m.uid === activeModule);
-                if (!module) return null;
+                const activeModuleData = modules.find((m: any) => m.uid === activeModule);
+                if (!activeModuleData) return null;
+
+                const moduleGroup = activeModuleData.course_module_group;
+                const lectureTitle = moduleGroup?.title_of_lecture;
+                const lectureDetails = moduleGroup?.lecture_deatils; // JSON RTE field
+                const courseVideo = activeModuleData.course_video;
+                const moduleTitle = activeModuleData.title || activeModuleData.module_title || 'Module';
+                const moduleDescription = activeModuleData.description || activeModuleData.module_description || '';
 
                 return (
                   <>
                     <h2
                       style={{
-                        fontSize: '24px',
+                        fontSize: '28px',
                         fontWeight: '600',
                         color: '#1f2937',
-                        marginBottom: '16px',
+                        marginBottom: '24px',
                       }}
                     >
-                      {module.title || 'Module'}
+                      {lectureTitle || activeModuleData.title || activeModuleData.module_title || 'Module'}
                     </h2>
-                    {module.description && (
+
+                    {/* Course Video/Image */}
+                    {courseVideo && (
+                      <div style={{ marginBottom: '32px' }}>
+                        {(() => {
+                          const videoUrl = courseVideo.url || (typeof courseVideo === 'string' ? courseVideo : null);
+                          const contentType = courseVideo.content_type || courseVideo.contentType;
+                          
+                          if (!videoUrl) return null;
+                          
+                          if (contentType?.startsWith('image/') || videoUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                            return (
+                              <img
+                                src={videoUrl}
+                                alt={lectureTitle || 'Course content'}
+                                style={{
+                                  width: '100%',
+                                  maxHeight: '500px',
+                                  objectFit: 'contain',
+                                  borderRadius: '8px',
+                                  marginBottom: '24px',
+                                }}
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                }}
+                              />
+                            );
+                          } else if (contentType?.startsWith('audio/') || videoUrl.match(/\.(mp3|wav|ogg)$/i)) {
+                            return (
+                              <div style={{ marginBottom: '24px' }}>
+                                <audio controls style={{ width: '100%' }}>
+                                  <source src={videoUrl} type={contentType || 'audio/mpeg'} />
+                                  Your browser does not support the audio element.
+                                </audio>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div style={{ marginBottom: '24px' }}>
+                                <a
+                                  href={videoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '12px 24px',
+                                    background: '#6366f1',
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  Download/View File
+                                </a>
+                              </div>
+                            );
+                          }
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Course Module Content - JSON RTE */}
+                    {lectureDetails && (
+                      <div style={{ marginBottom: '32px' }}>
+                        <JSONRTEContent
+                          jsonRteData={lectureDetails}
+                          style={{
+                            fontSize: '16px',
+                            color: '#374151',
+                            lineHeight: '1.8',
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Fallback content if no JSON RTE */}
+                    {!lectureDetails && (activeModuleData.description || activeModuleData.module_description) && (
                       <div
                         style={{
                           fontSize: '16px',
                           color: '#374151',
-                          lineHeight: '1.6',
+                          lineHeight: '1.8',
                           marginBottom: '24px',
                         }}
-                        dangerouslySetInnerHTML={{ __html: module.description }}
+                        dangerouslySetInnerHTML={{ __html: activeModuleData.description || activeModuleData.module_description }}
                       />
                     )}
-                    {module.content && (
+                    {!lectureDetails && (activeModuleData.content || activeModuleData.module_content) && (
                       <div
                         style={{
                           fontSize: '16px',
                           color: '#374151',
-                          lineHeight: '1.6',
+                          lineHeight: '1.8',
                         }}
-                        dangerouslySetInnerHTML={{ __html: module.content }}
+                        dangerouslySetInnerHTML={{ __html: activeModuleData.content || activeModuleData.module_content }}
                       />
                     )}
                   </>

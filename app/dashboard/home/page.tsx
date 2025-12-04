@@ -99,7 +99,7 @@ function AssignedCoursesList() {
               marginBottom: '4px',
             }}
           >
-            {course.title || 'Untitled Course'}
+            {course.title || course.course_title || 'Untitled Course'}
           </h4>
           <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
             {course.course_modules?.length || 0} modules
@@ -128,8 +128,10 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const [updates, setUpdates] = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
+  const [courseProgress, setCourseProgress] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(true);
+  const [courseProgressLoading, setCourseProgressLoading] = useState(true);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -146,6 +148,9 @@ export default function HomePage() {
     setUser(parsedUser);
     fetchUpdates();
     fetchProgress();
+    if (parsedUser.role === 'admin' || parsedUser.role === 'superadmin') {
+      fetchCourseProgress();
+    }
   }, [router]);
 
   const fetchUpdates = async () => {
@@ -178,6 +183,25 @@ export default function HomePage() {
       console.error('Error fetching progress:', error);
     } finally {
       setProgressLoading(false);
+    }
+  };
+
+  const fetchCourseProgress = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch('/api/courses/progress/admin', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCourseProgress(data);
+      }
+    } catch (error) {
+      console.error('Error fetching course progress:', error);
+    } finally {
+      setCourseProgressLoading(false);
     }
   };
 
@@ -516,6 +540,138 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* Course Progress Section - For Admins */}
+        {(user.role === 'admin' || user.role === 'superadmin') && !courseProgressLoading && courseProgress && courseProgress.progress && courseProgress.progress.length > 0 && (
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+              marginBottom: '24px',
+            }}
+          >
+            <h3
+              style={{
+                fontSize: '20px',
+                fontWeight: '600',
+                color: '#1f2937',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>🎓</span> Course Progress
+            </h3>
+
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {courseProgress.progress.map((trainee: any) => (
+                <div
+                  key={trainee.traineeId}
+                  style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e7eb',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
+                        {trainee.traineeName}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                        {trainee.traineeEmail}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6366f1', marginBottom: '4px' }}>
+                        {trainee.averageProgress}%
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {trainee.totalCourses} course{trainee.totalCourses !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '8px',
+                      background: '#e5e7eb',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${trainee.averageProgress}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </div>
+
+                  {/* Course Details */}
+                  {trainee.courses && trainee.courses.length > 0 && (
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {trainee.courses.map((course: any, idx: number) => (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '12px',
+                            background: 'white',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937' }}>
+                              Course: {course.courseUid}
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#6366f1' }}>
+                              {course.progress}%
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '6px',
+                              background: '#e5e7eb',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${course.progress}%`,
+                                height: '100%',
+                                background: '#6366f1',
+                              }}
+                            />
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                            {course.completedModules} module{course.completedModules !== 1 ? 's' : ''} completed
+                            {course.completedAt && (
+                              <span style={{ marginLeft: '8px' }}>
+                                • Completed on {new Date(course.completedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#6b7280' }}>
             Loading updates...
@@ -542,7 +698,7 @@ export default function HomePage() {
                   gap: '8px',
                 }}
               >
-                <span>✨</span> What's New
+                <span>✨</span> What&apos;s New
               </h3>
               {updates?.whatsNew && Array.isArray(updates.whatsNew) ? (
                 <div style={{ display: 'grid', gap: '16px' }}>

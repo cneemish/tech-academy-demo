@@ -61,7 +61,7 @@ async function handleGet(req: AuthenticatedRequest) {
         .lean();
 
       // Get all unique trainees
-      const traineeIds = [...new Set(allPlans.map((plan: any) => plan.traineeId))];
+      const traineeIds = Array.from(new Set(allPlans.map((plan: any) => plan.traineeId)));
       
       // Get trainee details
       const trainees = await User.find({ userId: { $in: traineeIds }, role: 'trainee' })

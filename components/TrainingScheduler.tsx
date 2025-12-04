@@ -9,7 +9,34 @@ interface Trainee {
   email: string;
 }
 
+interface Trainer {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface CourseModule {
+  uid: string;
+  title: string;
+  module_title?: string;
+  description?: string;
+  module_number?: number;
+  trainer?: {
+    title?: string;
+    name?: string;
+  };
+}
+
+interface Course {
+  uid: string;
+  title: string;
+  course_title?: string;
+  course_modules?: CourseModule[];
+}
+
 interface TrainingModule {
+  moduleUid?: string;
   moduleName: string;
   trainerName: string;
   startDate: string;
@@ -18,6 +45,11 @@ interface TrainingModule {
 
 export default function TrainingScheduler() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [allModules, setAllModules] = useState<CourseModule[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
+  const [selectedCourseData, setSelectedCourseData] = useState<Course | null>(null);
   const [selectedTrainee, setSelectedTrainee] = useState<string>('');
   const [planName, setPlanName] = useState('');
   const [description, setDescription] = useState('');
@@ -25,12 +57,29 @@ export default function TrainingScheduler() {
     { moduleName: '', trainerName: '', startDate: '', endDate: '' },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     fetchTrainees();
+    fetchTrainers();
+    fetchCourses();
+    // Don't fetch all modules - we'll use modules from selected course
   }, []);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      fetchCourseDetails(selectedCourse);
+      // Reset modules when course changes
+      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
+    } else {
+      setSelectedCourseData(null);
+      setAllModules([]); // Clear modules when no course is selected
+      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCourse]);
 
   const fetchTrainees = async () => {
     try {
@@ -50,6 +99,110 @@ export default function TrainingScheduler() {
     }
   };
 
+  const fetchTrainers = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch('/api/users/trainers', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTrainers(data.trainers);
+      }
+    } catch (error) {
+      console.error('Error fetching trainers:', error);
+    }
+  };
+
+  const fetchCourses = async () => {
+    try {
+      setIsLoadingCourses(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch('/api/courses', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      console.log('Courses fetch response:', data);
+      
+      if (data.success) {
+        setCourses(data.courses || []);
+        if (data.courses && data.courses.length === 0) {
+          console.warn('No courses found. Please create and publish courses in Contentstack.');
+        }
+      } else {
+        console.error('Failed to fetch courses:', data.error, data.details);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
+
+
+  const fetchCourseDetails = async (entryId: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const response = await fetch(`/api/courses/entry/${entryId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      console.log('Course details fetch response:', data);
+      
+      if (data.success && data.course) {
+        setSelectedCourseData(data.course);
+        
+        // Extract and sort modules from the course's referenced modules
+        // The API maps result.reference to course_modules in the response
+        const courseModules = (data.course.course_modules || data.course.reference || []).map((module: any) => ({
+          ...module,
+          uid: module.uid,
+          title: module.title || module.module_title || 'Untitled Module',
+          description: module.description || module.module_description || '',
+          content: module.content || module.module_content || '',
+          trainer: module.trainer || {},
+          module_number: module.module_number || module.moduleNumber || 0,
+        }));
+        
+        console.log('Course modules extracted:', {
+          count: courseModules.length,
+          modules: courseModules.map((m: any) => ({ uid: m.uid, title: m.title, module_number: m.module_number })),
+        });
+        
+        // Sort modules by module_number in ascending order
+        const sortedModules = courseModules.sort((a: any, b: any) => {
+          const numA = Number(a.module_number) || 0;
+          const numB = Number(b.module_number) || 0;
+          return numA - numB;
+        });
+        
+        // Set the modules for this course
+        setAllModules(sortedModules);
+        
+        // Auto-fill plan name with course title
+        const courseTitle = data.course.title || data.course.course_title || '';
+        if (courseTitle && !planName) {
+          setPlanName(courseTitle);
+        }
+      } else {
+        console.error('Failed to fetch course details:', data.error, data.details);
+        setAllModules([]);
+      }
+    } catch (error) {
+      console.error('Error fetching course details:', error);
+      setAllModules([]);
+    }
+  };
+
   const addModule = () => {
     setModules([...modules, { moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
   };
@@ -63,11 +216,48 @@ export default function TrainingScheduler() {
   const updateModule = (index: number, field: keyof TrainingModule, value: string) => {
     const updated = [...modules];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // If module is selected from dropdown, auto-fill module name and trainer
+    if (field === 'moduleUid' && value) {
+      // First try to find in all modules
+      const selectedModule = allModules.find((m: CourseModule) => m.uid === value);
+      
+      // If not found, try in selected course modules
+      if (!selectedModule && selectedCourseData) {
+        const courseModule = selectedCourseData.course_modules?.find(
+          (m: CourseModule) => m.uid === value
+        );
+        if (courseModule) {
+          updated[index].moduleName = courseModule.title || courseModule.module_title || '';
+          // Extract trainer name if available
+          if (courseModule.trainer) {
+            updated[index].trainerName = 
+              courseModule.trainer.title || 
+              courseModule.trainer.name || 
+              '';
+          }
+        }
+      } else if (selectedModule) {
+        updated[index].moduleName = selectedModule.title || selectedModule.module_title || '';
+        // Extract trainer name if available
+        if (selectedModule.trainer) {
+          updated[index].trainerName = 
+            selectedModule.trainer.title || 
+            selectedModule.trainer.name || 
+            '';
+        }
+      }
+    }
+    
     setModules(updated);
   };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+
+    if (!selectedCourse) {
+      newErrors.course = 'Please select a course';
+    }
 
     if (!planName.trim()) {
       newErrors.planName = 'Training plan name is required';
@@ -78,8 +268,8 @@ export default function TrainingScheduler() {
     }
 
     modules.forEach((module, index) => {
-      if (!module.moduleName.trim()) {
-        newErrors[`module_${index}_name`] = 'Module name is required';
+      if (!module.moduleUid && !module.moduleName.trim()) {
+        newErrors[`module_${index}_name`] = 'Module is required';
       }
       if (!module.startDate) {
         newErrors[`module_${index}_start`] = 'Start date is required';
@@ -119,6 +309,7 @@ export default function TrainingScheduler() {
           description,
           traineeId: selectedTrainee,
           modules: modules.map((m) => ({
+            moduleUid: m.moduleUid,
             moduleName: m.moduleName,
             trainerName: m.trainerName,
             startDate: m.startDate,
@@ -217,6 +408,84 @@ export default function TrainingScheduler() {
           >
             Schedule Training
           </h3>
+
+          {/* Course Selection */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label
+                htmlFor="course"
+                style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#374151',
+                }}
+              >
+                Select Course <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <button
+                type="button"
+                onClick={fetchCourses}
+                disabled={isLoadingCourses}
+                style={{
+                  padding: '6px 12px',
+                  background: '#6366f1',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  cursor: isLoadingCourses ? 'not-allowed' : 'pointer',
+                  opacity: isLoadingCourses ? 0.6 : 1,
+                }}
+                title="Refresh courses list"
+              >
+                {isLoadingCourses ? 'Loading...' : '🔄 Refresh'}
+              </button>
+            </div>
+            <select
+              id="course"
+              value={selectedCourse}
+              onChange={(e) => {
+                setSelectedCourse(e.target.value);
+                if (errors.course) {
+                  setErrors((prev) => ({ ...prev, course: '' }));
+                }
+              }}
+              disabled={isLoadingCourses}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: `1px solid ${errors.course ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '8px',
+                fontSize: '14px',
+                background: 'white',
+                opacity: isLoadingCourses ? 0.6 : 1,
+              }}
+            >
+              <option value="">
+                {isLoadingCourses 
+                  ? 'Loading courses...' 
+                  : courses.length === 0 
+                    ? 'No courses available - Click Refresh or create courses in Contentstack'
+                    : 'Select a course'}
+              </option>
+              {courses.map((course) => (
+                <option key={course.uid} value={course.uid}>
+                  {course.title || course.course_title || 'Untitled Course'}
+                </option>
+              ))}
+            </select>
+            {errors.course && (
+              <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
+                {errors.course}
+              </p>
+            )}
+            {!isLoadingCourses && courses.length === 0 && (
+              <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
+                No courses found. Please create and publish courses in Contentstack, then click Refresh.
+              </p>
+            )}
+          </div>
 
           {/* Trainee Selection */}
           <div style={{ marginBottom: '24px' }}>
@@ -345,15 +614,28 @@ export default function TrainingScheduler() {
                 marginBottom: '20px',
               }}
             >
-              <h4
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: '#1f2937',
-                }}
-              >
-                Training Modules
-              </h4>
+              <div>
+                <h4
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#1f2937',
+                    marginBottom: '4px',
+                  }}
+                >
+                  Training Modules
+                </h4>
+                {selectedCourse && allModules.length > 0 && (
+                  <p style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic' }}>
+                    {allModules.length} module{allModules.length !== 1 ? 's' : ''} available for this course
+                  </p>
+                )}
+                {selectedCourse && allModules.length === 0 && (
+                  <p style={{ fontSize: '12px', color: '#ef4444', fontStyle: 'italic' }}>
+                    No modules found for this course. Please add modules to the course in Contentstack.
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={addModule}
@@ -427,33 +709,80 @@ export default function TrainingScheduler() {
                         color: '#374151',
                       }}
                     >
-                      Module Name <span style={{ color: '#ef4444' }}>*</span>
+                      Module <span style={{ color: '#ef4444' }}>*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={module.moduleName}
-                      onChange={(e) => {
-                        updateModule(index, 'moduleName', e.target.value);
-                        if (errors[`module_${index}_name`]) {
-                          setErrors((prev) => {
-                            const newErrors = { ...prev };
-                            delete newErrors[`module_${index}_name`];
-                            return newErrors;
-                          });
-                        }
-                      }}
-                      placeholder="e.g., Introduction to Contentstack"
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        border: `1px solid ${errors[`module_${index}_name`] ? '#ef4444' : '#d1d5db'}`,
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                      }}
-                    />
+                    {allModules.length > 0 ? (
+                      <select
+                        value={module.moduleUid || ''}
+                        onChange={(e) => {
+                          updateModule(index, 'moduleUid', e.target.value);
+                          if (errors[`module_${index}_name`]) {
+                            setErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors[`module_${index}_name`];
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: `1px solid ${errors[`module_${index}_name`] ? '#ef4444' : '#d1d5db'}`,
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          background: 'white',
+                        }}
+                      >
+                        <option value="">Select a module</option>
+                        {allModules
+                          .filter((mod: CourseModule) => {
+                            // Don't show already selected modules in other rows
+                            const isUsed = modules.some((m, i) => i !== index && m.moduleUid === mod.uid);
+                            return !isUsed;
+                          })
+                          .map((mod: CourseModule) => (
+                            <option key={mod.uid} value={mod.uid}>
+                              {mod.title || mod.module_title || 'Untitled Module'}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={module.moduleName}
+                        onChange={(e) => {
+                          updateModule(index, 'moduleName', e.target.value);
+                          if (errors[`module_${index}_name`]) {
+                            setErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors[`module_${index}_name`];
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        placeholder="Enter module name"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: `1px solid ${errors[`module_${index}_name`] ? '#ef4444' : '#d1d5db'}`,
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                        }}
+                      />
+                    )}
                     {errors[`module_${index}_name`] && (
                       <p style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px' }}>
                         {errors[`module_${index}_name`]}
+                      </p>
+                    )}
+                    {!selectedCourse && (
+                      <p style={{ color: '#6b7280', fontSize: '11px', marginTop: '4px' }}>
+                        Please select a course first to see available modules
+                      </p>
+                    )}
+                    {selectedCourse && allModules.length === 0 && (
+                      <p style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px' }}>
+                        No modules found for this course. Please add modules to the course in Contentstack.
                       </p>
                     )}
                   </div>
@@ -470,19 +799,29 @@ export default function TrainingScheduler() {
                     >
                       Trainer Name
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={module.trainerName}
                       onChange={(e) => updateModule(index, 'trainerName', e.target.value)}
-                      placeholder="e.g., John Doe"
                       style={{
                         width: '100%',
                         padding: '10px',
                         border: '1px solid #d1d5db',
                         borderRadius: '6px',
                         fontSize: '14px',
+                        background: 'white',
+                        cursor: 'pointer',
                       }}
-                    />
+                    >
+                      <option value="">Select a trainer</option>
+                      {trainers.map((trainer) => (
+                        <option 
+                          key={trainer.userId} 
+                          value={`${trainer.firstName} ${trainer.lastName}`}
+                        >
+                          {trainer.firstName} {trainer.lastName} ({trainer.email})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

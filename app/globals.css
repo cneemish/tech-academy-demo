@@ -24,3 +24,124 @@ a {
   text-decoration: none;
 }
 
+/* JSON RTE Content Styles */
+.json-rte-content {
+  color: #374151;
+  line-height: 1.8;
+}
+
+.json-rte-content p {
+  margin-bottom: 1rem;
+}
+
+.json-rte-content h1,
+.json-rte-content h2,
+.json-rte-content h3,
+.json-rte-content h4,
+.json-rte-content h5,
+.json-rte-content h6 {
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: #1f2937;
+}
+
+.json-rte-content h1 {
+  font-size: 2rem;
+}
+
+.json-rte-content h2 {
+  font-size: 1.5rem;
+}
+
+.json-rte-content h3 {
+  font-size: 1.25rem;
+}
+
+.json-rte-content strong,
+.json-rte-content b {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.json-rte-content em,
+.json-rte-content i {
+  font-style: italic;
+}
+
+.json-rte-content code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  color: #dc2626;
+}
+
+.json-rte-content pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.json-rte-content pre code {
+  background-color: transparent;
+  color: #f9fafb;
+  padding: 0;
+}
+
+.json-rte-content ul,
+.json-rte-content ol {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.json-rte-content li {
+  margin-bottom: 0.5rem;
+}
+
+.json-rte-content a {
+  color: #6366f1;
+  text-decoration: underline;
+}
+
+.json-rte-content a:hover {
+  color: #4f46e5;
+}
+
+.json-rte-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.json-rte-content blockquote {
+  border-left: 4px solid #6366f1;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.json-rte-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.json-rte-content table th,
+.json-rte-content table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.json-rte-content table th {
+  background-color: #f3f4f6;
+  font-weight: 600;
+}
+

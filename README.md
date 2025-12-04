@@ -26,12 +26,14 @@ A Next.js application for managing training academy users with role-based access
 ## Setup Instructions
 
 1. **Install Dependencies**
+
    ```bash
    npm install
    ```
 
 2. **Environment Variables**
    Create a `.env.local` file in the root directory:
+
    ```
    MONGODB_URI=your-mongodb-connection-string
    JWT_SECRET=your-super-secret-jwt-key-change-in-production
@@ -40,18 +42,22 @@ A Next.js application for managing training academy users with role-based access
    EMAIL_PASS=your-app-password
    CONTENTSTACK_API_KEY=your-contentstack-api-key
    CONTENTSTACK_DELIVERY_TOKEN=your-contentstack-delivery-token
-   CONTENTSTACK_ENVIRONMENT=production
+   CONTENTSTACK_ENVIRONMENT=prod
    ```
 
 3. **Initialize Database**
+
    ```bash
    npx ts-node scripts/init-db.ts
    ```
+
    This will create:
+
    - Three roles: superadmin, admin, trainee
    - A default superadmin user (email: superadmin@techacademy.com, password: SuperAdmin123!)
 
 4. **Run Development Server**
+
    ```bash
    npm run dev
    ```
@@ -70,22 +76,27 @@ A Next.js application for managing training academy users with role-based access
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/login` - User login
 
 ### Users
+
 - `GET /api/users` - Get all users (Admin/Super Admin only)
 - `POST /api/users` - Create new user (Admin/Super Admin only)
 - `GET /api/users/trainees` - Get all trainees (Admin/Super Admin only)
 
 ### Roles
+
 - `GET /api/roles` - Get all roles
 
 ### Training Plans
+
 - `GET /api/training-plans` - Get all training plans (Admin/Super Admin only)
 - `POST /api/training-plans` - Create training plan (Admin/Super Admin only)
 - `GET /api/training-plans/progress` - Get trainee progress
 
 ### Courses
+
 - `GET /api/courses` - Get all courses from Contentstack
 - `GET /api/courses/[courseId]` - Get single course with modules
 - `GET /api/taxonomy` - Get taxonomy terms for filtering
@@ -93,12 +104,14 @@ A Next.js application for managing training academy users with role-based access
 ## User Roles
 
 1. **Super Admin**
+
    - Full system access
    - Can invite users
    - Can create training plans
    - Can create content
 
 2. **Admin**
+
    - Can invite users
    - Can create training plans
    - Can create content
