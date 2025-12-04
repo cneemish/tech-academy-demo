@@ -8,47 +8,62 @@ async function handleGet(req: AuthenticatedRequest) {
     const { searchParams } = new URL(req.url);
     const taxonomyUid = searchParams.get('uid') || 'course_module'; // Default to course_module taxonomy
     
-    // Fetch taxonomy terms using Contentstack Taxonomy API
-    // Reference: https://www.contentstack.com/docs/developers/taxonomy
-    // Note: The Contentstack JavaScript SDK may not support Taxonomy() directly
-    // We'll use the Management API or fetch via HTTP request
-    // For now, we'll use a workaround by fetching from the Contentstack API directly
-    
-    let result: any;
-    try {
-      // Try using the Contentstack SDK if Taxonomy method exists
-      if ((Stack as any).Taxonomy) {
-        const Query = (Stack as any).Taxonomy(taxonomyUid).Query();
-        result = await Query.toJSON().find();
-      } else {
-        // Fallback: Return empty result - taxonomy terms should be managed via Contentstack UI
-        // and will be included in entry data when fetched
-        result = [];
-      }
-    } catch (sdkError) {
-      // If SDK method doesn't exist, return empty array
-      // Taxonomy terms will be available in course entries when fetched
-      result = [];
-    }
-
-    // Contentstack returns terms in a specific structure
-    // The result might be an array of terms or an object with terms
+    // Fetch taxonomy terms
+    // Note: Contentstack Delivery API doesn't support direct taxonomy fetching
+    // We'll use the taxonomy data from the JSON file or fetch from entries
     let terms: any[] = [];
     
-    if (Array.isArray(result)) {
-      // If result is an array, check if it's [terms, metadata] or just terms
-      if (result.length === 2 && Array.isArray(result[0])) {
-        terms = result[0]; // First element is terms array
+    try {
+      // Try to fetch from Contentstack Delivery API first (if supported)
+      const apiKey = process.env.CONTENTSTACK_API_KEY || 'blt458f96b1d51470e8';
+      const deliveryToken = process.env.CONTENTSTACK_DELIVERY_TOKEN || 'cs481b1820d8f02692d6d06fe6';
+      const baseUrl = 'https://cdn.contentstack.io/v3';
+      
+      // Attempt to fetch taxonomy terms via API
+      const taxonomyUrl = `${baseUrl}/taxonomies/${taxonomyUid}/terms`;
+      const response = await fetch(taxonomyUrl, {
+        method: 'GET',
+        headers: {
+          'api_key': apiKey,
+          'access_token': deliveryToken,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        terms = data.terms || data.items || [];
+        console.log(`Fetched ${terms.length} taxonomy terms from API for ${taxonomyUid}`);
       } else {
-        terms = result; // Entire result is terms array
+        // API doesn't support taxonomy endpoint, use JSON file as fallback
+        throw new Error('Taxonomy API not available');
       }
-    } else if (result && typeof result === 'object') {
-      // If result is an object, terms might be in a 'terms' property
-      terms = result.terms || result.items || result.entries || [];
+    } catch (apiError: any) {
+      // Fallback: Use the taxonomy JSON file from contenttype folder
+      // This matches the structure from course_module_taxanomy.json
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const taxonomyFilePath = path.join(process.cwd(), 'contenttype', 'course_module_taxanomy.json');
+        
+        if (fs.existsSync(taxonomyFilePath)) {
+          const taxonomyData = JSON.parse(fs.readFileSync(taxonomyFilePath, 'utf8'));
+          if (taxonomyData.taxonomy && taxonomyData.taxonomy.uid === taxonomyUid) {
+            terms = taxonomyData.terms || [];
+            console.log(`Loaded ${terms.length} taxonomy terms from JSON file for ${taxonomyUid}`);
+          }
+        }
+      } catch (fileError: any) {
+        console.error('Error loading taxonomy from JSON file:', fileError.message);
+        // If JSON file doesn't exist, return empty array
+        terms = [];
+      }
     }
 
     // Build hierarchical structure of terms (preserve parent-child relationships)
     // This function builds a tree structure while also creating a flat list
+    // Also creates a full path string like "UI > Content Type > Entry"
     const buildTermTree = (termList: any[]): { tree: any[], flat: any[] } => {
       const flat: any[] = [];
       const termMap = new Map<string, any>();
@@ -59,9 +74,10 @@ async function handleGet(req: AuthenticatedRequest) {
           uid: term.uid || term.id || term.term_uid,
           name: term.name || term.title || term.label || 'Unnamed Term',
           description: term.description || '',
-          parent_uid: term.parent_uid || term.parentUid || null,
+          parent_uid: term.parent_uid || term.parentUid || term.parent?.uid || null,
           children: [],
           level: 0,
+          path: '', // Will be set in second pass
         };
         
         if (termData.uid) {
@@ -70,8 +86,30 @@ async function handleGet(req: AuthenticatedRequest) {
         }
       });
       
-      // Second pass: build tree structure
+      // Helper function to build full path (e.g., "UI > Content Type > Entry")
+      const buildPath = (term: any, pathMap: Map<string, string>): string => {
+        if (pathMap.has(term.uid)) {
+          return pathMap.get(term.uid)!;
+        }
+        
+        if (!term.parent_uid || !termMap.has(term.parent_uid)) {
+          // Root term
+          const path = term.name;
+          pathMap.set(term.uid, path);
+          return path;
+        }
+        
+        const parent = termMap.get(term.parent_uid);
+        const parentPath = buildPath(parent, pathMap);
+        const fullPath = `${parentPath} > ${term.name}`;
+        pathMap.set(term.uid, fullPath);
+        return fullPath;
+      };
+      
+      // Second pass: build tree structure and paths
       const rootTerms: any[] = [];
+      const pathMap = new Map<string, string>();
+      
       flat.forEach((term: any) => {
         if (term.parent_uid && termMap.has(term.parent_uid)) {
           const parent = termMap.get(term.parent_uid);
@@ -80,7 +118,21 @@ async function handleGet(req: AuthenticatedRequest) {
         } else {
           rootTerms.push(term);
         }
+        
+        // Build full path for this term
+        term.path = buildPath(term, pathMap);
       });
+      
+      // Sort children at each level
+      const sortChildren = (terms: any[]) => {
+        terms.forEach(term => {
+          if (term.children.length > 0) {
+            term.children.sort((a: any, b: any) => a.name.localeCompare(b.name));
+            sortChildren(term.children);
+          }
+        });
+      };
+      sortChildren(rootTerms);
       
       return { tree: rootTerms, flat };
     };
