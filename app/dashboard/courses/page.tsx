@@ -149,10 +149,12 @@ export default function CoursesPage() {
             marginBottom: '8px',
           }}
         >
-          All Courses
+          {user?.role === 'trainee' ? 'My Assigned Courses' : 'All Courses'}
         </h2>
         <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '32px' }}>
-          Manage and view all available courses
+          {user?.role === 'trainee'
+            ? 'View courses assigned to you by your trainer'
+            : 'Manage and view all available courses'}
         </p>
 
         {/* Search and Filter */}
@@ -272,10 +274,12 @@ export default function CoursesPage() {
           >
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
             <div style={{ fontSize: '18px', fontWeight: '500', color: '#1f2937', marginBottom: '8px' }}>
-              No courses found
+              {user?.role === 'trainee' ? 'No courses assigned' : 'No courses found'}
             </div>
             <div style={{ fontSize: '14px', color: '#6b7280' }}>
-              {searchTerm || selectedTaxonomy
+              {user?.role === 'trainee'
+                ? 'Please contact your trainer to assign courses to you.'
+                : searchTerm || selectedTaxonomy
                 ? 'Try adjusting your search or filters'
                 : 'No courses are available at the moment'}
             </div>

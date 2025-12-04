@@ -36,7 +36,7 @@ async function handlePost(req: AuthenticatedRequest) {
   try {
     await connectDB();
 
-    const { planName, description, traineeId, modules } = await req.json();
+    const { planName, description, courseId, courseTitle, traineeId, modules } = await req.json();
 
     // Validation
     if (!planName || !traineeId || !modules || !Array.isArray(modules) || modules.length === 0) {
@@ -80,6 +80,8 @@ async function handlePost(req: AuthenticatedRequest) {
       planId,
       planName,
       description,
+      courseId: courseId || '',
+      courseTitle: courseTitle || planName, // Use planName as fallback
       traineeId,
       traineeEmail: trainee.email,
       modules: modules.map((m: any, index: number) => ({
