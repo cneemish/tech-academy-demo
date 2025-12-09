@@ -8,6 +8,7 @@ import UsersList from '@/components/UsersList';
 
 // Force dynamic rendering - this page requires client-side features
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function AdminDashboard() {
   const router = useRouter();

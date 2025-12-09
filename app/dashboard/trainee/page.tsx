@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 
 // Force dynamic rendering - this page requires client-side features
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function TraineeDashboard() {
   const router = useRouter();

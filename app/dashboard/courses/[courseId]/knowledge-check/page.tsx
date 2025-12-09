@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import JSONRTEContent from '@/components/JSONRTEContent';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface Question {
   question_to_be_asked: string;
@@ -66,7 +67,8 @@ export default function KnowledgeCheckPage() {
     setUser(parsedUser);
     fetchCourseData();
     fetchTest();
-  }, [courseId, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
   const fetchCourseData = async () => {
     try {
