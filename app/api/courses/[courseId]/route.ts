@@ -7,9 +7,10 @@ async function handleGet(req: AuthenticatedRequest, courseId: string) {
   try {
     const Query = Stack.ContentType('course').Entry(courseId);
     
-    // Include referenced modules using the correct field name from content type
+    // Include referenced modules and test using the correct field name from content type
     // Based on course content type JSON: uid="reference", reference_to=["course_module"]
-    Query.includeReference(['reference']);
+    // Also include reference_test for knowledge check
+    Query.includeReference(['reference', 'reference_test']);
 
     const result = await Query.toJSON().fetch();
 
@@ -41,6 +42,16 @@ async function handleGet(req: AuthenticatedRequest, courseId: string) {
         course_video: module.course_video || null,
         module_number: module.module_number || module.moduleNumber || 0,
       })),
+      // Include test reference if available - normalize to handle array or single object
+      reference_test: (() => {
+        let testRef = result.reference_test;
+        // Handle array case
+        if (Array.isArray(testRef)) {
+          testRef = testRef.length > 0 ? testRef[0] : null;
+        }
+        // Only return if it has a uid (valid reference)
+        return testRef && testRef.uid ? testRef : null;
+      })(),
     };
 
     return NextResponse.json(

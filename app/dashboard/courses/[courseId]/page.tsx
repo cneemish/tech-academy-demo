@@ -76,6 +76,17 @@ export default function CourseDetailPage() {
         const newCourse = data.course;
         const previousModuleCount = course?.course_modules?.length || 0;
         const newModuleCount = newCourse.course_modules?.length || 0;
+        
+        // Normalize reference_test - handle both array and single object
+        if (newCourse.reference_test) {
+          if (Array.isArray(newCourse.reference_test)) {
+            newCourse.reference_test = newCourse.reference_test.length > 0 ? newCourse.reference_test[0] : null;
+          }
+          // Ensure it has a uid to be considered valid
+          if (newCourse.reference_test && !newCourse.reference_test.uid) {
+            newCourse.reference_test = null;
+          }
+        }
 
         // Update course data
         setCourse(newCourse);
@@ -553,6 +564,78 @@ export default function CourseDetailPage() {
               })}
             </div>
           </div>
+
+          {/* Knowledge Check Section - Dynamically shown for any course with reference_test */}
+          {course.reference_test && course.reference_test.uid && (() => {
+            const modules = course.course_modules || [];
+            const totalModules = modules.length;
+            const completedModules = courseProgress?.completedModules || [];
+            const completedCount = completedModules.length;
+            const allModulesCompleted = totalModules > 0 && completedCount >= totalModules;
+            const canTakeTest = totalModules === 0 || allModulesCompleted;
+            
+            return (
+              <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
+                <h4
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    marginBottom: '16px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Knowledge Check
+                </h4>
+                <button
+                  onClick={() => {
+                    if (canTakeTest) {
+                      router.push(`/dashboard/courses/${courseId}/knowledge-check`);
+                    } else {
+                      alert(`Please complete all ${totalModules} modules before taking the knowledge check. You have completed ${completedCount} of ${totalModules} modules.`);
+                    }
+                  }}
+                  disabled={!canTakeTest}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    background: canTakeTest ? '#6366f1' : '#d1d5db',
+                    color: canTakeTest ? 'white' : '#6b7280',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: canTakeTest ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'background 0.2s',
+                    opacity: canTakeTest ? 1 : 0.6,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (canTakeTest) {
+                      e.currentTarget.style.background = '#4f46e5';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (canTakeTest) {
+                      e.currentTarget.style.background = '#6366f1';
+                    }
+                  }}
+                >
+                  <span>📝</span>
+                  <span>Take Knowledge Check</span>
+                </button>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', textAlign: 'center' }}>
+                  {canTakeTest 
+                    ? 'Test your knowledge' 
+                    : `Complete ${totalModules - completedCount} more module${totalModules - completedCount === 1 ? '' : 's'} to unlock`}
+                </div>
+              </div>
+            );
+          })()}
         </aside>
 
         {/* Main Content Area */}

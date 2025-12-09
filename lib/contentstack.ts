@@ -1,10 +1,23 @@
 import Contentstack from 'contentstack';
 
+// Validate required environment variables
+const apiKey = process.env.CONTENTSTACK_API_KEY;
+const deliveryToken = process.env.CONTENTSTACK_DELIVERY_TOKEN;
+const environment = process.env.CONTENTSTACK_ENVIRONMENT || 'prod';
+
+if (!apiKey) {
+  throw new Error('CONTENTSTACK_API_KEY environment variable is required');
+}
+
+if (!deliveryToken) {
+  throw new Error('CONTENTSTACK_DELIVERY_TOKEN environment variable is required');
+}
+
 // Initialize Contentstack SDK
 const Stack = Contentstack.Stack({
-  api_key: process.env.CONTENTSTACK_API_KEY || 'blt458f96b1d51470e8',
-  delivery_token: process.env.CONTENTSTACK_DELIVERY_TOKEN || 'cs481b1820d8f02692d6d06fe6',
-  environment: process.env.CONTENTSTACK_ENVIRONMENT || 'prod',
+  api_key: apiKey,
+  delivery_token: deliveryToken,
+  environment: environment,
   region: Contentstack.Region.US,
 });
 

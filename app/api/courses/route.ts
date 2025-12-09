@@ -4,6 +4,8 @@ import { roleMiddleware, AuthenticatedRequest } from '@/lib/middleware';
 import { detectTaxonomyFieldName, COMMON_TAXONOMY_FIELD_NAMES } from '@/lib/taxonomy-helper';
 import connectDB from '@/lib/mongodb';
 import TrainingPlan from '@/models/TrainingPlan';
+import fs from 'fs';
+import path from 'path';
 
 // Get all courses
 async function handleGet(req: AuthenticatedRequest) {
@@ -52,9 +54,10 @@ async function handleGet(req: AuthenticatedRequest) {
       Query.search(search);
     }
 
+    // Include reference field to get module count for each course
+    Query.includeReference(['reference']);
+
     // Fetch all published courses from Contentstack
-    // Note: We don't include references here to avoid errors if the reference field doesn't exist
-    // Modules will be fetched separately when a course is selected
     const result = await Query.toJSON().find();
     
     console.log('Contentstack courses query result:', {
@@ -82,6 +85,56 @@ async function handleGet(req: AuthenticatedRequest) {
     }
     
     if (taxonomyTerm) {
+      // Load taxonomy terms to build parent-child relationships
+      // This allows filtering by parent term to include all child terms
+      let taxonomyTermsMap: Map<string, { uid: string; parent_uid: string | null; children: string[] }> = new Map();
+      
+      try {
+        // Load taxonomy from JSON file
+        const taxonomyFilePath = path.join(process.cwd(), 'contenttype', 'course_module (2).json');
+        
+        if (fs.existsSync(taxonomyFilePath)) {
+          const taxonomyData = JSON.parse(fs.readFileSync(taxonomyFilePath, 'utf8'));
+          const terms = taxonomyData.terms || [];
+          
+          // First pass: create map entries
+          terms.forEach((term: any) => {
+            taxonomyTermsMap.set(term.uid, {
+              uid: term.uid,
+              parent_uid: term.parent_uid || null,
+              children: [],
+            });
+          });
+          
+          // Second pass: build parent-child relationships
+          terms.forEach((term: any) => {
+            if (term.parent_uid && taxonomyTermsMap.has(term.parent_uid)) {
+              taxonomyTermsMap.get(term.parent_uid)!.children.push(term.uid);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading taxonomy for filtering:', error);
+      }
+      
+      // Get all descendant term UIDs (children, grandchildren, etc.) for the selected term
+      const getAllDescendantUids = (termUid: string): string[] => {
+        const descendants: string[] = [termUid]; // Include the term itself
+        const term = taxonomyTermsMap.get(termUid);
+        
+        if (term) {
+          term.children.forEach((childUid: string) => {
+            descendants.push(...getAllDescendantUids(childUid));
+          });
+        }
+        
+        return descendants;
+      };
+      
+      // Get all matching term UIDs (selected term + all its descendants)
+      // This means selecting a parent will show courses with parent OR any child
+      const matchingTermUids = getAllDescendantUids(taxonomyTerm);
+      
       filteredCourses = filteredCourses.filter((course: any) => {
         const taxonomyField = course.taxonomies || course.categories || course.taxonomy || course.category;
         if (!taxonomyField) return false;
@@ -89,16 +142,16 @@ async function handleGet(req: AuthenticatedRequest) {
         // Handle array of taxonomy terms
         if (Array.isArray(taxonomyField)) {
           return taxonomyField.some((term: any) => {
-            // Check if term UID matches
+            // Check if term UID matches selected term or any of its descendants
             const termUid = typeof term === 'string' ? term : (term?.uid || term?.term_uid || term?.id);
-            return termUid === taxonomyTerm;
+            return matchingTermUids.includes(termUid);
           });
         }
         
         // Handle single taxonomy term object
         if (typeof taxonomyField === 'object') {
           const termUid = taxonomyField.uid || taxonomyField.term_uid || taxonomyField.id;
-          return termUid === taxonomyTerm;
+          return matchingTermUids.includes(termUid);
         }
         
         return false;
@@ -154,8 +207,16 @@ async function handleGet(req: AuthenticatedRequest) {
         taxonomyFieldName: taxonomyFieldName || 'taxonomies', // Store for reference
         // Include course thumbnail if available
         course_thumbnail: course.course_thumbnail || null,
-        // Modules will be fetched separately when course is selected
-        // This avoids errors if course_modules reference field doesn't exist or has different name
+        // Get module count from reference field (course_modules reference)
+        // Handle both array and single object cases
+        module_count: (() => {
+          const reference = course.reference || [];
+          if (Array.isArray(reference)) {
+            return reference.length;
+          }
+          return reference ? 1 : 0;
+        })(),
+        // Keep course_modules as empty array for listing (full details fetched on course detail page)
         course_modules: [],
       };
     });

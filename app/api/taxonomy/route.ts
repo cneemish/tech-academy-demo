@@ -15,9 +15,14 @@ async function handleGet(req: AuthenticatedRequest) {
     
     try {
       // Try to fetch from Contentstack Delivery API first (if supported)
-      const apiKey = process.env.CONTENTSTACK_API_KEY || 'blt458f96b1d51470e8';
-      const deliveryToken = process.env.CONTENTSTACK_DELIVERY_TOKEN || 'cs481b1820d8f02692d6d06fe6';
+      const apiKey = process.env.CONTENTSTACK_API_KEY;
+      const deliveryToken = process.env.CONTENTSTACK_DELIVERY_TOKEN;
       const baseUrl = 'https://cdn.contentstack.io/v3';
+      
+      // Only attempt API fetch if credentials are available
+      if (!apiKey || !deliveryToken) {
+        throw new Error('Contentstack credentials not configured');
+      }
       
       // Attempt to fetch taxonomy terms via API
       const taxonomyUrl = `${baseUrl}/taxonomies/${taxonomyUid}/terms`;
@@ -41,16 +46,28 @@ async function handleGet(req: AuthenticatedRequest) {
       }
     } catch (apiError: any) {
       // Fallback: Use the taxonomy JSON file from contenttype folder
-      // This matches the structure from course_module_taxanomy.json
+      // Try course_module (2).json first, then course_module_taxanomy.json
       try {
         const fs = require('fs');
         const path = require('path');
-        const taxonomyFilePath = path.join(process.cwd(), 'contenttype', 'course_module_taxanomy.json');
+        
+        // Try course_module (2).json first
+        let taxonomyFilePath = path.join(process.cwd(), 'contenttype', 'course_module (2).json');
+        if (!fs.existsSync(taxonomyFilePath)) {
+          // Fallback to course_module_taxanomy.json
+          taxonomyFilePath = path.join(process.cwd(), 'contenttype', 'course_module_taxanomy.json');
+        }
         
         if (fs.existsSync(taxonomyFilePath)) {
           const taxonomyData = JSON.parse(fs.readFileSync(taxonomyFilePath, 'utf8'));
+          
+          // Handle both formats: {taxonomy: {...}, terms: [...]} and direct structure
           if (taxonomyData.taxonomy && taxonomyData.taxonomy.uid === taxonomyUid) {
             terms = taxonomyData.terms || [];
+            console.log(`Loaded ${terms.length} taxonomy terms from JSON file for ${taxonomyUid}`);
+          } else if (taxonomyData.terms && Array.isArray(taxonomyData.terms)) {
+            // Direct terms array
+            terms = taxonomyData.terms;
             console.log(`Loaded ${terms.length} taxonomy terms from JSON file for ${taxonomyUid}`);
           }
         }

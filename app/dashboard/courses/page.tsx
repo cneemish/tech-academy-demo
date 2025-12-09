@@ -167,94 +167,224 @@ export default function CoursesPage() {
             marginBottom: '24px',
           }}
         >
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
+              Search & Filter
+            </h3>
+            <p style={{ fontSize: '14px', color: '#6b7280' }}>
+              Find courses by name or category
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '8px',
+                }}
+              >
+                <span style={{ marginRight: '6px' }}>🔍</span>
+                Search Courses
+              </label>
               <input
                 type="text"
-                placeholder="Search courses..."
+                placeholder="Type to search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  border: '1px solid #d1d5db',
+                  padding: '12px 16px',
+                  border: '2px solid #e5e7eb',
                   borderRadius: '8px',
                   fontSize: '14px',
+                  transition: 'all 0.2s',
+                  outline: 'none',
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#6366f1';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.boxShadow = 'none';
                 }}
               />
             </div>
-            <div style={{ minWidth: '250px' }}>
-              <select
-                value={selectedTaxonomy}
-                onChange={(e) => setSelectedTaxonomy(e.target.value)}
+            <div style={{ minWidth: '280px', flex: 1 }}>
+              <label
                 style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
+                  display: 'block',
                   fontSize: '14px',
-                  background: 'white',
-                  cursor: 'pointer',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '8px',
                 }}
-                disabled={taxonomyTerms.length === 0}
               >
-                <option value="">
-                  {taxonomyTerms.length === 0 ? 'No categories available' : 'All Categories'}
-                </option>
-                {taxonomyTree.length > 0 ? (
-                  // Render hierarchical categories with full path (e.g., "UI > Content Type > Entry")
-                  taxonomyTree.map((term: any) => {
-                    const renderTerm = (t: any): JSX.Element[] => {
-                      const elements: JSX.Element[] = [];
+                <span style={{ marginRight: '6px' }}>📂</span>
+                Category
+              </label>
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedTaxonomy}
+                  onChange={(e) => setSelectedTaxonomy(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    paddingRight: '40px',
+                    border: selectedTaxonomy ? '2px solid #6366f1' : '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    transition: 'all 0.2s',
+                    outline: 'none',
+                    fontWeight: selectedTaxonomy ? '500' : '400',
+                    color: selectedTaxonomy ? '#6366f1' : '#374151',
+                  }}
+                  disabled={taxonomyTerms.length === 0}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#6366f1';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = selectedTaxonomy ? '#6366f1' : '#e5e7eb';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                >
+                  <option value="" style={{ fontWeight: '500', color: '#6b7280' }}>
+                    {taxonomyTerms.length === 0 ? 'No categories available' : '✓ All Categories'}
+                  </option>
+                  {taxonomyTree.length > 0 ? (
+                    // Render hierarchical categories with full path (e.g., "Headless CMS > UI > Content Type")
+                    taxonomyTree.map((term: any) => {
+                      const renderTerm = (t: any, indent: number = 0): JSX.Element[] => {
+                        const elements: JSX.Element[] = [];
+                        
+                        // Render current term with full path if available, otherwise just name
+                        const displayText = t.path || t.name || 'Unnamed Term';
+                        const isParent = t.children && t.children.length > 0;
+                        const prefix = indent === 0 ? '📁 ' : indent === 1 ? '  ├─ ' : '  │  '.repeat(indent - 1) + '  └─ ';
+                        
+                        elements.push(
+                          <option 
+                            key={t.uid} 
+                            value={t.uid}
+                            style={{
+                              fontWeight: indent === 0 ? '600' : indent === 1 ? '500' : '400',
+                              color: indent === 0 ? '#6366f1' : indent === 1 ? '#4b5563' : '#6b7280',
+                              paddingLeft: `${indent * 8}px`,
+                            }}
+                          >
+                            {prefix}{displayText}
+                          </option>
+                        );
+                        
+                        // Recursively render children with indentation
+                        if (t.children && t.children.length > 0) {
+                          t.children.forEach((child: any) => {
+                            elements.push(...renderTerm(child, indent + 1));
+                          });
+                        }
+                        
+                        return elements;
+                      };
                       
-                      // Render current term with full path if available, otherwise just name
-                      const displayText = t.path || t.name || 'Unnamed Term';
-                      elements.push(
-                        <option key={t.uid} value={t.uid}>
-                          {displayText}
-                        </option>
-                      );
-                      
-                      // Recursively render children (they will have their own full paths)
-                      if (t.children && t.children.length > 0) {
-                        t.children.forEach((child: any) => {
-                          elements.push(...renderTerm(child));
-                        });
-                      }
-                      
-                      return elements;
-                    };
-                    
-                    return renderTerm(term);
-                  })
-                ) : taxonomyTerms.length > 0 ? (
-                  // Fallback to flat list with paths if available
-                  taxonomyTerms.map((term: any) => (
-                    <option key={term.uid} value={term.uid}>
-                      {term.path || term.name || term.title || 'Unnamed Term'}
-                    </option>
-                  ))
-                ) : null}
-              </select>
+                      return renderTerm(term);
+                    })
+                  ) : taxonomyTerms.length > 0 ? (
+                    // Fallback to flat list with paths if available
+                    taxonomyTerms.map((term: any) => (
+                      <option key={term.uid} value={term.uid}>
+                        {term.path || term.name || term.title || 'Unnamed Term'}
+                      </option>
+                    ))
+                  ) : null}
+                </select>
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    pointerEvents: 'none',
+                    color: '#9ca3af',
+                    fontSize: '12px',
+                  }}
+                >
+                  ▼
+                </div>
+              </div>
             </div>
             {selectedTaxonomy && (
               <button
                 onClick={() => setSelectedTaxonomy('')}
                 style={{
                   padding: '12px 20px',
-                  background: '#f3f4f6',
+                  background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
                   color: '#6b7280',
-                  border: '1px solid #d1d5db',
+                  border: '2px solid #d1d5db',
                   borderRadius: '8px',
                   fontSize: '14px',
                   cursor: 'pointer',
                   fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)';
+                  e.currentTarget.style.borderColor = '#ef4444';
+                  e.currentTarget.style.color = '#dc2626';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)';
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.color = '#6b7280';
                 }}
               >
-                Clear Filter
+                <span>✕</span>
+                <span>Clear Filter</span>
               </button>
             )}
           </div>
+          {selectedTaxonomy && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                background: '#ede9fe',
+                borderRadius: '8px',
+                border: '1px solid #c7d2fe',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span style={{ fontSize: '16px' }}>✓</span>
+              <span style={{ fontSize: '14px', color: '#6366f1', fontWeight: '500' }}>
+                Filtering by: {taxonomyTerms.find((t: any) => t.uid === selectedTaxonomy)?.path || 
+                  taxonomyTree.find((t: any) => {
+                    const findTerm = (term: any): any => {
+                      if (term.uid === selectedTaxonomy) return term;
+                      if (term.children) {
+                        for (const child of term.children) {
+                          const found = findTerm(child);
+                          if (found) return found;
+                        }
+                      }
+                      return null;
+                    };
+                    return findTerm(t);
+                  })?.path || 'Selected category'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Courses Grid */}
@@ -402,50 +532,8 @@ export default function CoursesPage() {
                         color: '#6b7280',
                       }}
                     >
-                      {course.course_modules?.length || 0} modules
+                      {course.module_count || 0} modules
                     </span>
-                    {course.taxonomy && Array.isArray(course.taxonomy) && course.taxonomy.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {course.taxonomy.slice(0, 3).map((taxonomyTerm: any, idx: number) => {
-                          // Handle both object and string formats
-                          const termUid = typeof taxonomyTerm === 'string' 
-                            ? taxonomyTerm 
-                            : taxonomyTerm?.uid || taxonomyTerm?.term_uid;
-                          const termName = typeof taxonomyTerm === 'string'
-                            ? taxonomyTerms.find(t => t.uid === taxonomyTerm)?.name || taxonomyTerm
-                            : taxonomyTerm?.name || taxonomyTerm?.title || 'Category';
-                          
-                          return (
-                            <span
-                              key={termUid || idx}
-                              style={{
-                                padding: '4px 8px',
-                                background: '#e0e7ff',
-                                color: '#6366f1',
-                                borderRadius: '4px',
-                                fontSize: '11px',
-                                fontWeight: '500',
-                              }}
-                            >
-                              {termName}
-                            </span>
-                          );
-                        })}
-                        {course.taxonomy.length > 3 && (
-                          <span
-                            style={{
-                              padding: '4px 8px',
-                              background: '#f3f4f6',
-                              color: '#6b7280',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                            }}
-                          >
-                            +{course.taxonomy.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                   <span
                     style={{
