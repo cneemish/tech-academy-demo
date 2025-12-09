@@ -89,7 +89,7 @@ export default function AdminDashboard() {
         </div>
 
         {activeTab === 'invite' && <InviteUser />}
-        {activeTab === 'users' && <UsersList />}
+        {activeTab === 'users' && <UsersList currentUser={user} />}
       </div>
     </Layout>
   );

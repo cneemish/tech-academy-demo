@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Trainee {
   userId: string;
@@ -61,48 +61,6 @@ export default function TrainingScheduler() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    fetchTrainees();
-    fetchTrainers();
-    fetchCourses();
-    // Don't fetch all modules - we'll use modules from selected course
-    
-    // Auto-refresh courses every 30 seconds to detect new entries (silent refresh)
-    const refreshInterval = setInterval(() => {
-      fetchCourses(true); // Silent refresh
-      // Also refresh selected course details if a course is selected
-      if (selectedCourse) {
-        fetchCourseDetails(selectedCourse, true);
-      }
-    }, 30000); // 30 seconds
-    
-    // Also refresh when page becomes visible
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchCourses();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      clearInterval(refreshInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedCourse) {
-      fetchCourseDetails(selectedCourse);
-      // Reset modules when course changes
-      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
-    } else {
-      setSelectedCourseData(null);
-      setAllModules([]); // Clear modules when no course is selected
-      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCourse]);
-
   const fetchTrainees = async () => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -139,7 +97,7 @@ export default function TrainingScheduler() {
     }
   };
 
-  const fetchCourses = async (silent = false) => {
+  const fetchCourses = useCallback(async (silent = false) => {
     try {
       if (!silent) {
         setIsLoadingCourses(true);
@@ -159,16 +117,15 @@ export default function TrainingScheduler() {
       if (data.success) {
         const newCourses = data.courses || [];
         // Only update if courses actually changed
-        const currentCourseIds = courses.map((c: Course) => c.uid).sort().join(',');
-        const newCourseIds = newCourses.map((c: Course) => c.uid).sort().join(',');
-        
-        if (currentCourseIds !== newCourseIds) {
-          setCourses(newCourses);
-          // If a course was selected and it still exists, refresh its details
-          if (selectedCourse && newCourses.some((c: Course) => c.uid === selectedCourse)) {
-            fetchCourseDetails(selectedCourse, true);
+        setCourses((prevCourses) => {
+          const currentCourseIds = prevCourses.map((c: Course) => c.uid).sort().join(',');
+          const newCourseIds = newCourses.map((c: Course) => c.uid).sort().join(',');
+          
+          if (currentCourseIds !== newCourseIds) {
+            return newCourses;
           }
-        }
+          return prevCourses;
+        });
       }
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -178,10 +135,10 @@ export default function TrainingScheduler() {
         setIsLoadingCourses(false);
       }
     }
-  };
+  }, []);
 
 
-  const fetchCourseDetails = async (entryId: string, silent = false) => {
+  const fetchCourseDetails = useCallback(async (entryId: string, silent = false) => {
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const response = await fetch(`/api/courses/entry/${entryId}`, {
@@ -197,40 +154,43 @@ export default function TrainingScheduler() {
       const data = await response.json();
       
       if (data.success && data.course) {
-        const previousModuleCount = selectedCourseData?.course_modules?.length || 0;
-        setSelectedCourseData(data.course);
-        
-        // Extract and sort modules from the course's referenced modules
-        // The API maps result.reference to course_modules in the response
-        const courseModules = (data.course.course_modules || data.course.reference || []).map((module: any) => ({
-          ...module,
-          uid: module.uid,
-          title: module.title || module.module_title || 'Untitled Module',
-          description: module.description || module.module_description || '',
-          content: module.content || module.module_content || '',
-          trainer: module.trainer || {},
-          module_number: module.module_number || module.moduleNumber || 0,
-        }));
-        
-        console.log('Course modules extracted:', {
-          count: courseModules.length,
-          modules: courseModules.map((m: any) => ({ uid: m.uid, title: m.title, module_number: m.module_number })),
+        setSelectedCourseData((prevData) => {
+          const previousModuleCount = prevData?.course_modules?.length || 0;
+          
+          // Extract and sort modules from the course's referenced modules
+          // The API maps result.reference to course_modules in the response
+          const courseModules = (data.course.course_modules || data.course.reference || []).map((module: any) => ({
+            ...module,
+            uid: module.uid,
+            title: module.title || module.module_title || 'Untitled Module',
+            description: module.description || module.module_description || '',
+            content: module.content || module.module_content || '',
+            trainer: module.trainer || {},
+            module_number: module.module_number || module.moduleNumber || 0,
+          }));
+          
+          console.log('Course modules extracted:', {
+            count: courseModules.length,
+            modules: courseModules.map((m: any) => ({ uid: m.uid, title: m.title, module_number: m.module_number })),
+          });
+          
+          // Sort modules by module_number in ascending order
+          const sortedModules = courseModules.sort((a: any, b: any) => {
+            const numA = Number(a.module_number) || 0;
+            const numB = Number(b.module_number) || 0;
+            return numA - numB;
+          });
+          
+          // Set the modules for this course
+          setAllModules(sortedModules);
+          
+          // If new modules were added, log it
+          if (sortedModules.length > previousModuleCount && previousModuleCount > 0 && !silent) {
+            console.log(`New module(s) detected in course! Previous: ${previousModuleCount}, New: ${sortedModules.length}`);
+          }
+          
+          return data.course;
         });
-        
-        // Sort modules by module_number in ascending order
-        const sortedModules = courseModules.sort((a: any, b: any) => {
-          const numA = Number(a.module_number) || 0;
-          const numB = Number(b.module_number) || 0;
-          return numA - numB;
-        });
-        
-        // Set the modules for this course
-        setAllModules(sortedModules);
-        
-        // If new modules were added, log it
-        if (sortedModules.length > previousModuleCount && previousModuleCount > 0 && !silent) {
-          console.log(`New module(s) detected in course! Previous: ${previousModuleCount}, New: ${sortedModules.length}`);
-        }
         
         // Auto-fill plan name with course title
         const courseTitle = data.course.title || data.course.course_title || '';
@@ -245,7 +205,48 @@ export default function TrainingScheduler() {
       console.error('Error fetching course details:', error);
       setAllModules([]);
     }
-  };
+  }, [planName]);
+
+  useEffect(() => {
+    fetchTrainees();
+    fetchTrainers();
+    fetchCourses();
+    // Don't fetch all modules - we'll use modules from selected course
+    
+    // Auto-refresh courses every 30 seconds to detect new entries (silent refresh)
+    const refreshInterval = setInterval(() => {
+      fetchCourses(true); // Silent refresh
+      // Also refresh selected course details if a course is selected
+      if (selectedCourse) {
+        fetchCourseDetails(selectedCourse, true);
+      }
+    }, 30000); // 30 seconds
+    
+    // Also refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCourses();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchCourses, fetchCourseDetails, selectedCourse]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      fetchCourseDetails(selectedCourse);
+      // Reset modules when course changes
+      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
+    } else {
+      setSelectedCourseData(null);
+      setAllModules([]); // Clear modules when no course is selected
+      setModules([{ moduleName: '', trainerName: '', startDate: '', endDate: '' }]);
+    }
+  }, [selectedCourse, fetchCourseDetails]);
 
   const addModule = () => {
     setModules([...modules, { moduleName: '', trainerName: '', startDate: '', endDate: '' }]);

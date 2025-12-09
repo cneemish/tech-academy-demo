@@ -47,8 +47,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update last login
+    // Update last login and change status to 'accepted' if it was 'pending'
     user.lastLoginAt = new Date();
+    if (user.status === 'pending') {
+      user.status = 'accepted';
+    }
     await user.save();
 
     // Generate JWT token

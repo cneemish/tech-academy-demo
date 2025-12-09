@@ -23,6 +23,10 @@ export default function InviteUser() {
     email: string;
     password: string;
     emailSent: boolean;
+    stackCreated?: boolean;
+    stackShared?: boolean;
+    stackUid?: string | null;
+    stackError?: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -108,6 +112,10 @@ export default function InviteUser() {
         email: data.user.email,
         password: data.generatedPassword,
         emailSent: data.emailSent || false,
+        stackCreated: data.stackCreated || false,
+        stackShared: data.stackShared || false,
+        stackUid: data.stackUid || null,
+        stackError: data.stackError || null,
       });
       setFormData({
         firstName: '',
@@ -221,6 +229,40 @@ export default function InviteUser() {
             {!createdUser.emailSent && (
               <div style={{ marginTop: '12px', fontSize: '13px', color: '#6b7280' }}>
                 <strong>Note:</strong> To enable email sending, configure EMAIL_USER and EMAIL_PASS in your .env.local file.
+              </div>
+            )}
+            {formData.role === 'trainee' && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #d1d5db' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#1f2937' }}>
+                  Contentstack Stack Status:
+                </div>
+                {createdUser.stackCreated && createdUser.stackShared ? (
+                  <div style={{ color: '#10b981', fontSize: '13px' }}>
+                    ✓ Stack created and shared successfully
+                    {createdUser.stackUid && (
+                      <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '12px' }}>
+                        Stack UID: {createdUser.stackUid}
+                      </div>
+                    )}
+                  </div>
+                ) : createdUser.stackCreated && !createdUser.stackShared ? (
+                  <div style={{ color: '#f59e0b', fontSize: '13px' }}>
+                    ⚠ Stack created but sharing failed
+                    {createdUser.stackError && (
+                      <div style={{ marginTop: '4px', fontSize: '12px' }}>
+                        Error: {createdUser.stackError}
+                      </div>
+                    )}
+                  </div>
+                ) : createdUser.stackError ? (
+                  <div style={{ color: '#ef4444', fontSize: '13px' }}>
+                    ✗ Stack creation failed: {createdUser.stackError}
+                  </div>
+                ) : (
+                  <div style={{ color: '#6b7280', fontSize: '13px' }}>
+                    Stack creation skipped (credentials not configured)
+                  </div>
+                )}
               </div>
             )}
           </div>
